@@ -1,13 +1,20 @@
 import { NextResponse } from "next/server";
+import { assertLocalRequest, readJsonBody } from "@/lib/api";
 import { createProject, listProjects } from "@/lib/db";
-import { asMode, cleanPrompt } from "@/lib/validation";
+import { asMode, cleanPrompt, safeSourceUrl } from "@/lib/validation";
 
-export async function GET() {
+export async function GET(request: Request) {
+  const blocked = assertLocalRequest(request);
+  if (blocked) return blocked;
   return NextResponse.json({ projects: listProjects() });
 }
 
 export async function POST(request: Request) {
-  const body = await request.json().catch(() => ({}));
+  const blocked = assertLocalRequest(request);
+  if (blocked) return blocked;
+  const parsed = await readJsonBody(request);
+  if (parsed.error) return parsed.error;
+  const body = parsed.data as Record<string, unknown>;
   const prompt = cleanPrompt(body.prompt);
   const mode = asMode(body.mode);
   const bundle = createProject({
@@ -17,11 +24,12 @@ export async function POST(request: Request) {
     prompt,
     sources: Array.isArray(body.sources)
       ? body.sources
-          .filter((source: unknown) => source && typeof source === "object")
+          .slice(0, 12)
+          .filter((source: unknown): source is Record<string, unknown> => source !== null && typeof source === "object" && !Array.isArray(source))
           .map((source: Record<string, unknown>) => ({
             title: typeof source.title === "string" ? source.title.slice(0, 120) : "Uploaded source",
             excerpt: typeof source.excerpt === "string" ? source.excerpt.slice(0, 3000) : "Uploaded source attached at project creation.",
-            url: typeof source.url === "string" ? source.url : undefined
+            url: safeSourceUrl(source.url)
           }))
       : []
   });

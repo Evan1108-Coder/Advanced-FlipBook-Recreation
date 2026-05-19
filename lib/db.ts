@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { defaultProjectSettings } from "./defaults";
 import { makeId, nowIso } from "./id";
+import { mergeSettings, safeSourceUrl } from "./validation";
 import type {
   CanvasObject,
   ChatMessage,
@@ -14,12 +15,18 @@ import type {
   Source
 } from "./types";
 
-const dbPath = path.resolve(process.cwd(), process.env.LUMEN_ATLAS_DB_PATH ?? "./data/lumen-atlas.db");
+const configuredDbPath = process.env.LUMEN_ATLAS_DB_PATH ?? "./data/lumen-atlas.db";
+const resolvedDbPath = path.resolve(/*turbopackIgnore: true*/ process.cwd(), configuredDbPath);
+const dbPath =
+  resolvedDbPath.startsWith(process.cwd()) || process.env.LUMEN_ATLAS_ALLOW_EXTERNAL_DB_PATH === "true"
+    ? resolvedDbPath
+    : path.join(process.cwd(), "data", "lumen-atlas.db");
 fs.mkdirSync(path.dirname(dbPath), { recursive: true });
 
 const db = new Database(dbPath);
 db.pragma("journal_mode = WAL");
 db.pragma("foreign_keys = ON");
+db.pragma("busy_timeout = 5000");
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS projects (
@@ -99,7 +106,9 @@ db.exec(`
     project_id TEXT NOT NULL,
     object_id TEXT NOT NULL,
     snapshot_json TEXT NOT NULL,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    FOREIGN KEY(project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY(object_id) REFERENCES objects(id) ON DELETE CASCADE
   );
 `);
 
@@ -139,6 +148,7 @@ function mapProject(row: ProjectRow): Project {
 }
 
 function mapObject(row: ObjectRow): CanvasObject {
+  const payload = safeParseObject(row.payload_json, { status: "corrupt", body: "This object payload was corrupt and could not be loaded." });
   return {
     id: row.id,
     projectId: row.project_id,
@@ -149,7 +159,7 @@ function mapObject(row: ObjectRow): CanvasObject {
     width: row.width,
     height: row.height,
     parentId: row.parent_id,
-    payload: JSON.parse(row.payload_json),
+    payload,
     createdAt: row.created_at,
     updatedAt: row.updated_at
   };
@@ -225,7 +235,7 @@ export function getProjectBundle(projectId: string): ProjectBundle | null {
 
   return {
     project: mapProject(projectRow),
-    settings: settingsRow ? { ...defaultProjectSettings, ...JSON.parse(settingsRow.settings_json) } : defaultProjectSettings,
+    settings: settingsRow ? mergeSettings(safeParseObject(settingsRow.settings_json, defaultProjectSettings)) : defaultProjectSettings,
     objects,
     connections: connections.map((connection) => ({
       id: connection.id,
@@ -239,7 +249,7 @@ export function getProjectBundle(projectId: string): ProjectBundle | null {
       id: source.id,
       projectId: source.project_id,
       title: source.title,
-      url: source.url,
+      url: safeSourceUrl(source.url),
       excerpt: source.excerpt,
       quality: source.quality,
       createdAt: source.created_at
@@ -273,6 +283,7 @@ export function createProject(input: {
   const rootId = makeId("level");
   const now = nowIso();
   const title = input.name.trim() || input.prompt.trim() || "Untitled Atlas";
+  const modeSpec = modeContent(input.mode, title);
 
   const create = db.transaction(() => {
     db.prepare("INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?)").run(
@@ -287,18 +298,21 @@ export function createProject(input: {
     insertObject({
       id: rootId,
       projectId: id,
-      type: "level",
+      type: modeSpec.type,
       title,
-      x: 260,
-      y: 150,
+      x: 40,
+      y: 110,
       width: 380,
       height: 254,
       parentId: null,
       payload: {
         depth: 0,
+        mode: input.mode,
         prompt: input.prompt,
-        summary: `A source-aware visual starting point for ${title}.`,
-        transcript: `This first level introduces ${title}. Click regions to branch into definitions, systems, examples, timelines, and evidence.`,
+        summary: modeSpec.summary,
+        transcript: modeSpec.transcript,
+        claims: modeSpec.claims,
+        questions: modeSpec.questions,
         imageUrl: placeholderImage(title, input.mode),
         hotspots: [
           { label: "Definition", x: 0.22, y: 0.26 },
@@ -317,7 +331,7 @@ export function createProject(input: {
         addSource(id, {
           title: source.title,
           excerpt: source.excerpt,
-          url: source.url,
+          url: safeSourceUrl(source.url),
           quality: "ok"
         })
       );
@@ -337,7 +351,7 @@ export function createProject(input: {
 export function updateProjectSettings(projectId: string, settings: Partial<ProjectSettings>) {
   const bundle = getProjectBundle(projectId);
   if (!bundle) return null;
-  const merged = { ...bundle.settings, ...settings };
+  const merged = mergeSettings({ ...bundle.settings, ...settings });
   db.prepare("UPDATE project_settings SET settings_json = ?, updated_at = ? WHERE project_id = ?").run(
     JSON.stringify(merged),
     nowIso(),
@@ -396,7 +410,7 @@ export function updateObjectPayload(
   if (!current) return null;
   const snapshotId = makeId("version");
   const now = nowIso();
-  const currentPayload = JSON.parse(current.payload_json);
+  const currentPayload = safeParseObject(current.payload_json, {});
   const nextPayload = { ...currentPayload, ...payloadPatch };
   const update = db.transaction(() => {
     db.prepare("INSERT INTO versions VALUES (?, ?, ?, ?, ?)").run(snapshotId, projectId, objectId, JSON.stringify(mapObject(current)), now);
@@ -422,7 +436,7 @@ export function addSource(projectId: string, input: { title: string; excerpt: st
     makeId("source"),
     projectId,
     input.title,
-    input.url ?? null,
+    safeSourceUrl(input.url) ?? null,
     input.excerpt,
     input.quality,
     nowIso()
@@ -454,6 +468,7 @@ export function createChildLevel(input: {
   if (!parent) return null;
   const siblingCount = db.prepare("SELECT COUNT(*) as count FROM objects WHERE parent_id = ?").get(input.parentId) as { count: number };
   const now = nowIso();
+  const parentPayload = safeParseObject(parent.payload_json, {});
   const child: CanvasObject = {
     id: makeId("level"),
     projectId: input.projectId,
@@ -465,10 +480,15 @@ export function createChildLevel(input: {
     height: 280,
     parentId: input.parentId,
     payload: {
-      depth: Number(JSON.parse(parent.payload_json).depth ?? 0) + 1,
+      depth: Number(parentPayload.depth ?? 0) + 1,
       click: { x: input.clickX, y: input.clickY },
       summary: input.summary,
       transcript: input.transcript,
+      claims: [
+        `This branch explains ${input.title} in the context of ${parent.title}.`,
+        "Source support should be reviewed before using this as a final citation."
+      ],
+      questions: [`How does ${input.title} connect back to ${parent.title}?`, `What evidence would make this branch stronger?`],
       imageUrl: input.imageUrl,
       hotspots: [
         { label: "Structure", x: 0.26, y: 0.32 },
@@ -488,12 +508,47 @@ export function createChildLevel(input: {
   return getProjectBundle(input.projectId);
 }
 
+export function createProjectRootObject(projectId: string, title = "New Flipbook") {
+  const bundle = getProjectBundle(projectId);
+  if (!bundle) return null;
+  const now = nowIso();
+  const count = bundle.objects.filter((object) => !object.parentId).length;
+  const spec = modeContent("flipbook", title);
+  insertObject({
+    id: makeId("level"),
+    projectId,
+    type: "level",
+    title,
+    x: 40 + count * 80,
+    y: 110 + count * 80,
+    width: 380,
+    height: 254,
+    parentId: null,
+    payload: {
+      depth: 0,
+      mode: "flipbook",
+      summary: spec.summary,
+      transcript: spec.transcript,
+      claims: spec.claims,
+      questions: spec.questions,
+      imageUrl: placeholderImage(title, "flipbook"),
+      status: "ready",
+      provider: "local-placeholder"
+    },
+    createdAt: now,
+    updatedAt: now
+  });
+  touchProject(projectId);
+  return getProjectBundle(projectId);
+}
+
 export function createToolResult(input: { projectId: string; fromId: string; tool: string; prompt?: string }) {
   const parent = db.prepare("SELECT * FROM objects WHERE project_id = ? AND id = ?").get(input.projectId, input.fromId) as ObjectRow | undefined;
   if (!parent) return null;
   const now = nowIso();
-  const payload = JSON.parse(parent.payload_json);
+  const payload = safeParseObject(parent.payload_json, {});
   const title = `${input.tool} · ${parent.title}`;
+  const toolPayload = buildToolPayload(input.tool, parent.title, String(payload.summary ?? ""), input.prompt);
   const object: CanvasObject = {
     id: makeId(input.tool === "Ask" ? "ask" : "tool"),
     projectId: input.projectId,
@@ -505,12 +560,7 @@ export function createToolResult(input: { projectId: string; fromId: string; too
     height: 220,
     parentId: input.fromId,
     payload: {
-      tool: input.tool,
-      prompt: input.prompt ?? "",
-      body:
-        input.tool === "Ask"
-          ? "Ask a focused question about this object. The answer will use project memory, sources, and the selected context."
-          : `${input.tool} result for ${parent.title}: ${payload.summary ?? "A structured explanation will appear here."}`,
+      ...toolPayload,
       status: "ready"
     },
     createdAt: now,
@@ -525,6 +575,8 @@ export function createToolResult(input: { projectId: string; fromId: string; too
 export function deleteObject(projectId: string, objectId: string, confirmed = false) {
   const bundle = getProjectBundle(projectId);
   if (!bundle) return null;
+  const target = bundle.objects.find((object) => object.id === objectId);
+  if (!target) return null;
   const descendants = new Set<string>();
   const visit = (id: string) => {
     bundle.objects.filter((object) => object.parentId === id).forEach((child) => {
@@ -537,12 +589,26 @@ export function deleteObject(projectId: string, objectId: string, confirmed = fa
   const ids = [objectId, ...descendants];
   const deleteMany = db.transaction(() => {
     if (bundle.settings.deleteBehavior === "detach-descendants" || bundle.settings.deleteBehavior === "preserve-orphans") {
-      db.prepare("UPDATE objects SET parent_id = NULL, updated_at = ? WHERE project_id = ? AND parent_id = ?").run(nowIso(), projectId, objectId);
+      const children = bundle.objects.filter((object) => object.parentId === objectId);
+      children.forEach((child, index) => {
+        db.prepare("UPDATE objects SET parent_id = NULL, x = ?, y = ?, updated_at = ? WHERE project_id = ? AND id = ?").run(
+          target.x + (index + 1) * 48,
+          target.y + target.height + 120 + index * 42,
+          nowIso(),
+          projectId,
+          child.id
+        );
+      });
     }
     ids.forEach((id) => {
       db.prepare("DELETE FROM connections WHERE project_id = ? AND (from_id = ? OR to_id = ?)").run(projectId, id, id);
+      db.prepare("DELETE FROM versions WHERE project_id = ? AND object_id = ?").run(projectId, id);
       db.prepare("DELETE FROM objects WHERE project_id = ? AND id = ?").run(projectId, id);
     });
+  });
+  ids.forEach((id) => {
+    const object = bundle.objects.find((item) => item.id === id);
+    if (object) removeGeneratedAsset(object.payload.imageUrl);
   });
   deleteMany();
   touchProject(projectId);
@@ -578,6 +644,136 @@ function escapeSvg(value: string) {
 function compactTitle(value: string) {
   const clean = value.replace(/\s+/g, " ").trim();
   return clean.length > 28 ? `${clean.slice(0, 27)}...` : clean;
+}
+
+function safeParseObject(value: string, fallback: Record<string, unknown>) {
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function modeContent(mode: Mode, title: string): Pick<CanvasObject, "type"> & {
+  summary: string;
+  transcript: string;
+  claims: string[];
+  questions: string[];
+} {
+  const labels: Record<Mode, { type: CanvasObject["type"]; summary: string; transcript: string }> = {
+    flipbook: {
+      type: "level",
+      summary: `A branching visual starting point for ${title}.`,
+      transcript: `This Flipbook level introduces ${title}. Double-click a visual region to branch deeper, or use tools for explanations and checks.`
+    },
+    textbook: {
+      type: "level",
+      summary: `A textbook-style visual explanation of ${title}.`,
+      transcript: `This page organizes ${title} into a definition, core mechanism, example, and source-check area.`
+    },
+    "knowledge-map": {
+      type: "map",
+      summary: `A concept map for ${title}.`,
+      transcript: `This map separates central concepts, dependencies, examples, and open questions for ${title}.`
+    },
+    timeline: {
+      type: "timeline",
+      summary: `A chronological learning view for ${title}.`,
+      transcript: `This timeline frames ${title} as stages, causes, transitions, and outcomes.`
+    },
+    compare: {
+      type: "tool_result",
+      summary: `A comparison workspace for ${title}.`,
+      transcript: `This comparison highlights similarities, differences, tradeoffs, and evidence gaps around ${title}.`
+    },
+    "study-guide": {
+      type: "tool_result",
+      summary: `A study guide for ${title}.`,
+      transcript: `This guide includes a summary, key terms, review questions, and checks for understanding.`
+    },
+    "source-brief": {
+      type: "source",
+      summary: `A source brief for ${title}.`,
+      transcript: `This brief tracks claims, evidence quality, source gaps, and what should be verified next.`
+    },
+    presentation: {
+      type: "export",
+      summary: `A presentation outline for ${title}.`,
+      transcript: `This sequence turns ${title} into an opening, three teaching beats, and a closing review.`
+    }
+  };
+  const spec = labels[mode];
+  return {
+    ...spec,
+    claims: [`${title} needs source review before final use.`, `${spec.summary}`],
+    questions: [`What is the central idea of ${title}?`, `Which source would best support this page?`]
+  };
+}
+
+function buildToolPayload(tool: string, parentTitle: string, parentSummary: string, prompt?: string) {
+  const question = prompt?.trim();
+  const base = parentSummary || `Context from ${parentTitle}.`;
+  const outputs: Record<string, Record<string, unknown>> = {
+    Ask: {
+      tool,
+      prompt: question ?? "",
+      body: question
+        ? `Answer to "${question}": Based on ${parentTitle}, the strongest current explanation is: ${base} Add sources to strengthen this answer.`
+        : "Ask a focused question about this object. The answer will use project memory, sources, and the selected context.",
+      claims: question ? [`The answer is grounded in the selected object: ${parentTitle}.`] : [],
+      questions: []
+    },
+    Learn: {
+      tool,
+      prompt: question ?? "",
+      body: `Learn: ${parentTitle}. Core idea: ${base} Key terms, common misunderstandings, and next exploration paths are separated for review.`,
+      claims: [`${parentTitle} can be taught through definition, mechanism, example, and evidence.`],
+      questions: [`Can you explain ${parentTitle} in one sentence?`, `What example makes it concrete?`]
+    },
+    Analysis: {
+      tool,
+      body: `Analysis: ${parentTitle}. Break the idea into assumptions, mechanisms, constraints, evidence gaps, and implications.`,
+      claims: [`${parentTitle} has assumptions that should be made explicit.`],
+      questions: [`Which assumption is weakest?`]
+    },
+    Compare: {
+      tool,
+      body: `Compare: Use ${parentTitle} as the baseline. Add another object or source to complete similarities, differences, and tradeoffs.`,
+      claims: [],
+      questions: [`What should ${parentTitle} be compared against?`]
+    },
+    Timeline: {
+      tool,
+      body: `Timeline: ${parentTitle} can be organized into origin, development, turning points, current state, and future questions.`,
+      claims: [],
+      questions: [`Which event changed the path most?`]
+    },
+    Export: {
+      tool,
+      body: `Export package ready: selected object summary, transcript, claims, source list, and branch outline can be copied from this box.`,
+      exportFormats: ["Markdown", "Transcript", "Source list"],
+      claims: [],
+      questions: []
+    }
+  };
+  return outputs[tool] ?? {
+    tool,
+    prompt: question ?? "",
+    body: `${tool}: ${base}`,
+    claims: [],
+    questions: []
+  };
+}
+
+function removeGeneratedAsset(value: unknown) {
+  if (typeof value !== "string" || !value.startsWith("/generated/")) return;
+  const filePath = path.join(process.cwd(), "public", value);
+  try {
+    fs.rmSync(filePath, { force: true });
+  } catch {
+    // Best-effort cleanup; DB deletion should not fail because a generated file is already gone.
+  }
 }
 
 function touchProject(projectId: string) {

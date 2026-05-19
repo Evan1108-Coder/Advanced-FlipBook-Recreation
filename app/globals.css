@@ -307,7 +307,8 @@ button:disabled {
   box-shadow: var(--shadow);
 }
 
-.panel-trigger:hover .panel-menu {
+.panel-trigger:hover .panel-menu,
+.panel-menu.open {
   display: grid;
 }
 
@@ -665,6 +666,54 @@ button:disabled {
   color: var(--paper);
   padding: 12px 16px;
   box-shadow: var(--shadow);
+}
+
+.global-settings-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(47, 38, 25, 0.28);
+}
+
+.global-settings-modal > div,
+.canvas-empty-state {
+  border: var(--border);
+  border-radius: 10px;
+  background: var(--paper);
+  color: var(--ink);
+  padding: 22px;
+  box-shadow: var(--shadow);
+  max-width: 520px;
+}
+
+.canvas-empty-state {
+  position: absolute;
+  left: 40px;
+  top: 120px;
+  z-index: 4;
+}
+
+textarea:focus-visible,
+input:focus-visible,
+button:focus-visible {
+  outline: 2px solid rgba(125, 79, 19, 0.8);
+  outline-offset: 2px;
+}
+
+.motion-reduced *,
+.motion-reduced *::before,
+.motion-reduced *::after {
+  animation-duration: 1ms !important;
+  transition-duration: 1ms !important;
+}
+
+.motion-expressive .canvas-object,
+.motion-expressive .right-panel,
+.motion-expressive .chat-bubble {
+  transition-duration: 260ms;
 }
 
 @keyframes slideIn {

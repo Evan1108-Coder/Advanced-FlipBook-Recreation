@@ -293,6 +293,7 @@ function VersionsSection({ object }: { object?: CanvasObject }) {
 }
 
 function ExportSection({ bundle, object }: { bundle: ProjectBundle; object?: CanvasObject }) {
+  const markdown = `# ${object?.title ?? bundle.project.name}\n\n${object?.payload.transcript ?? bundle.project.description}\n\nSources: ${bundle.sources.length}`;
   return (
     <div style={{ display: "grid", gap: 12 }}>
       <SectionTitle detail="Prepare project materials for handoff." title="Export" />
@@ -303,6 +304,10 @@ function ExportSection({ bundle, object }: { bundle: ProjectBundle; object?: Can
         <span style={mutedStyle}>Objects: {bundle.objects.length}</span>
         <span style={mutedStyle}>Sources: {bundle.sources.length}</span>
       </div>
+      <textarea readOnly value={markdown} style={{ minHeight: 160, border: "1px solid #e1d7c9", borderRadius: 8, padding: 10, resize: "vertical" }} />
+      <button style={{ border: "1px solid #d8cdbc", borderRadius: 8, background: "#2f2923", color: "#fffaf0", padding: "8px 10px" }} onClick={() => navigator.clipboard?.writeText(markdown)}>
+        Copy Markdown Export
+      </button>
     </div>
   );
 }
@@ -426,10 +431,11 @@ export function RightPanel({
   })();
 
   return (
-    <aside aria-label="Project side panel" style={{ ...panelStyle, width: panelWidth }}>
+    <aside aria-label="Project side panel" style={{ ...panelStyle, width: `min(${panelWidth}px, 100vw)` }}>
       <button
         aria-label="Resize right panel"
         disabled={!onWidthChange}
+        tabIndex={-1}
         onPointerDown={startResize}
         style={{
           background: "transparent",

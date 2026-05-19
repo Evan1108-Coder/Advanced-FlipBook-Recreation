@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
-import { createChildLevel, createToolResult, getProjectBundle, updateObjectPayload } from "@/lib/db";
+import { assertLocalRequest, readJsonBody } from "@/lib/api";
+import { createChildLevel, createProjectRootObject, createToolResult, getProjectBundle, updateObjectPayload } from "@/lib/db";
 import { buildGenerationPrompt, generateVisual } from "@/lib/minimax";
 import { clampNumber, cleanPrompt } from "@/lib/validation";
 
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => ({}))) as {
+  const blocked = assertLocalRequest(request);
+  if (blocked) return blocked;
+  const parsed = await readJsonBody(request);
+  if (parsed.error) return parsed.error;
+  const body = parsed.data as {
     projectId: string;
     parentId: string;
     action: "explore" | "tool";
@@ -14,8 +19,8 @@ export async function POST(request: Request) {
     prompt?: string;
   };
 
-  if (typeof body.projectId !== "string" || typeof body.parentId !== "string") {
-    return NextResponse.json({ error: "Missing projectId or parentId" }, { status: 400 });
+  if (typeof body.projectId !== "string") {
+    return NextResponse.json({ error: "Missing projectId" }, { status: 400 });
   }
   if (body.action !== "explore" && body.action !== "tool") {
     return NextResponse.json({ error: "Unsupported generation action" }, { status: 400 });
@@ -23,33 +28,50 @@ export async function POST(request: Request) {
 
   const bundle = getProjectBundle(body.projectId);
   if (!bundle) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+  if (body.action === "tool" && body.tool === "New Flipbook") {
+    return NextResponse.json(createProjectRootObject(body.projectId));
+  }
+  if (typeof body.parentId !== "string") {
+    return NextResponse.json({ error: "Missing parentId" }, { status: 400 });
+  }
   const parent = bundle.objects.find((object) => object.id === body.parentId);
   if (!parent) return NextResponse.json({ error: "Parent object not found" }, { status: 404 });
+  if (body.action === "explore" && parent.type !== "level") {
+    return NextResponse.json({ error: "Only Flipbook levels can be explored into child levels." }, { status: 400 });
+  }
 
   if (body.action === "tool") {
     const tool = typeof body.tool === "string" ? body.tool : "Learn";
+    if (["Select", "Pan"].includes(tool)) return NextResponse.json(bundle);
     if (tool === "Regenerate" && parent.type === "level") {
-      const prompt = buildGenerationPrompt({
-        topic: parent.title,
-        parentTitle: parent.title,
-        memory: bundle.settings.memoryEnabled ? bundle.memory.slice(0, 5).map((item) => item.text) : []
-      });
-      const visual = await generateVisual({
-        title: parent.title,
-        prompt,
-        aspectRatio: bundle.settings.defaultAspectRatio,
-        quality: bundle.settings.minimaxQuality
-      });
-      return NextResponse.json(
-        updateObjectPayload(body.projectId, body.parentId, {
+      try {
+        const prompt = buildGenerationPrompt({
+          topic: parent.title,
+          parentTitle: parent.title,
+          memory: bundle.settings.memoryEnabled ? bundle.memory.slice(0, 5).map((item) => item.text) : [],
+          sourceStrictness: bundle.settings.sourceStrictness
+        });
+        const visual = await generateVisual({
+          title: parent.title,
+          prompt,
+          aspectRatio: bundle.settings.defaultAspectRatio,
+          quality: bundle.settings.minimaxQuality
+        });
+        const next = updateObjectPayload(body.projectId, body.parentId, {
           imageUrl: visual.imageUrl,
           provider: visual.provider,
           regeneratedAt: new Date().toISOString(),
           status: "ready"
-        })
-      );
+        });
+        if (!next) return NextResponse.json({ error: "Object no longer exists" }, { status: 409 });
+        return NextResponse.json(next);
+      } catch {
+        return NextResponse.json({ error: "Image regeneration failed." }, { status: 502 });
+      }
     }
-    return NextResponse.json(createToolResult({ projectId: body.projectId, fromId: body.parentId, tool, prompt: cleanPrompt(body.prompt, "") }));
+    const next = createToolResult({ projectId: body.projectId, fromId: body.parentId, tool, prompt: cleanPrompt(body.prompt, "") });
+    if (!next) return NextResponse.json({ error: "Object no longer exists" }, { status: 409 });
+    return NextResponse.json(next);
   }
 
   const clickX = clampNumber(body.clickX ?? 0.5, 0, 1);
@@ -60,7 +82,8 @@ export async function POST(request: Request) {
     parentTitle: parent.title,
     clickX,
     clickY,
-    memory: bundle.settings.memoryEnabled ? bundle.memory.slice(0, 5).map((item) => item.text) : []
+    memory: bundle.settings.memoryEnabled ? bundle.memory.slice(0, 5).map((item) => item.text) : [],
+    sourceStrictness: bundle.settings.sourceStrictness
   });
 
   try {

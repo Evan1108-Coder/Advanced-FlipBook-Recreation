@@ -1,8 +1,13 @@
 import { NextResponse } from "next/server";
+import { assertLocalRequest, readJsonBody } from "@/lib/api";
 import { addChatMessage, createToolResult, getProjectBundle, updateProjectSettings } from "@/lib/db";
 
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => ({}))) as { projectId?: string; message?: string; selectedObjectId?: string };
+  const blocked = assertLocalRequest(request);
+  if (blocked) return blocked;
+  const parsed = await readJsonBody(request);
+  if (parsed.error) return parsed.error;
+  const body = parsed.data as { projectId?: string; message?: string; selectedObjectId?: string };
   if (typeof body.projectId !== "string" || typeof body.message !== "string" || !body.message.trim()) {
     return NextResponse.json({ error: "Missing projectId or message" }, { status: 400 });
   }
@@ -14,7 +19,7 @@ export async function POST(request: Request) {
   const selected = bundle.objects.find((object) => object.id === body.selectedObjectId) ?? bundle.objects[0];
   const lower = message.toLowerCase();
 
-  let reply = `I read the project context, memory, sources, settings, and selected object. For "${message}", I recommend working from ${selected?.title ?? "the canvas"} and keeping citations visible.`;
+  let reply = `I read the project context, memory, sources, settings, and selected object. Source strictness is ${bundle.settings.sourceStrictness}; for "${message}", I recommend working from ${selected?.title ?? "the canvas"}${bundle.settings.sourceStrictness === "strict" ? " and marking unsupported claims before using the answer" : " and keeping citations visible"}.`;
 
   if (!bundle.settings.chatOperatorEnabled && (lower.includes("learn") || lower.includes("strict source") || lower.includes("strict sources"))) {
     reply = "Operator actions are disabled for this project, so I can advise but will not change the canvas or settings.";

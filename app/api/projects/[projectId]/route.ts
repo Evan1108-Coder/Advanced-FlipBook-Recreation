@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { deleteObject, getProjectBundle, updateObjectFrame, updateProjectSettings } from "@/lib/db";
+import { assertLocalRequest, readJsonBody } from "@/lib/api";
 import { cleanFrame, cleanSettings } from "@/lib/validation";
 
 type Params = Promise<{ projectId: string }>;
 
-export async function GET(_request: Request, context: { params: Params }) {
+export async function GET(request: Request, context: { params: Params }) {
+  const blocked = assertLocalRequest(request);
+  if (blocked) return blocked;
   const { projectId } = await context.params;
   const bundle = getProjectBundle(projectId);
   if (!bundle) return NextResponse.json({ error: "Project not found" }, { status: 404 });
@@ -12,8 +15,12 @@ export async function GET(_request: Request, context: { params: Params }) {
 }
 
 export async function PATCH(request: Request, context: { params: Params }) {
+  const blocked = assertLocalRequest(request);
+  if (blocked) return blocked;
   const { projectId } = await context.params;
-  const body = await request.json();
+  const parsed = await readJsonBody(request);
+  if (parsed.error) return parsed.error;
+  const body = parsed.data as Record<string, unknown>;
   if (body.type === "settings") {
     const settings = updateProjectSettings(projectId, cleanSettings(body.settings));
     if (!settings) return NextResponse.json({ error: "Project not found" }, { status: 404 });
@@ -31,6 +38,8 @@ export async function PATCH(request: Request, context: { params: Params }) {
 }
 
 export async function DELETE(request: Request, context: { params: Params }) {
+  const blocked = assertLocalRequest(request);
+  if (blocked) return blocked;
   const { projectId } = await context.params;
   const { searchParams } = new URL(request.url);
   const objectId = searchParams.get("objectId");

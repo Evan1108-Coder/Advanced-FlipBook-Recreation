@@ -333,6 +333,10 @@ export function ChatBubble({
           color: inherit;
           line-height: 1.4;
         }
+        form textarea:focus-visible {
+          outline: 2px solid rgba(125, 79, 19, 0.8);
+          outline-offset: 2px;
+        }
         form button {
           flex: 0 0 auto;
           background: #29261f;

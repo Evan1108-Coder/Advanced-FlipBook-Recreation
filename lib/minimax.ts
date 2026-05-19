@@ -15,9 +15,12 @@ export async function generateVisual(input: GenerateImageInput): Promise<{ image
     return { imageUrl: placeholderImage(input.title, "local"), provider: "local-placeholder" };
   }
 
-  const endpoint = process.env.MINIMAX_IMAGE_ENDPOINT ?? "https://api.minimax.io/v1/image_generation";
+  const endpoint = resolveMiniMaxEndpoint();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
   const response = await fetch(endpoint, {
     method: "POST",
+    signal: controller.signal,
     headers: {
       Authorization: `Bearer ${process.env.MINIMAX_API_KEY}`,
       "Content-Type": "application/json"
@@ -30,16 +33,17 @@ export async function generateVisual(input: GenerateImageInput): Promise<{ image
       n: 1,
       prompt_optimizer: input.quality !== "draft"
     })
-  });
+  }).finally(() => clearTimeout(timeout));
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`MiniMax image generation failed: ${response.status} ${text.slice(0, 220)}`);
+    throw new Error(`MiniMax image generation failed with status ${response.status}.`);
   }
+  const length = Number(response.headers.get("content-length") ?? 0);
+  if (Number.isFinite(length) && length > 8_000_000) throw new Error("MiniMax response was too large.");
 
   const json = await response.json();
   const base64 = json?.data?.image_base64?.[0];
-  if (!base64) {
+  if (typeof base64 !== "string" || base64.length > 8_000_000) {
     throw new Error("MiniMax response did not include data.image_base64[0].");
   }
 
@@ -50,18 +54,29 @@ export async function generateVisual(input: GenerateImageInput): Promise<{ image
   return { imageUrl: `/generated/${fileName}`, provider: "minimax-image-01" };
 }
 
+function resolveMiniMaxEndpoint() {
+  const official = "https://api.minimax.io/v1/image_generation";
+  const configured = process.env.MINIMAX_IMAGE_ENDPOINT;
+  if (!configured) return official;
+  const url = new URL(configured);
+  if (url.origin === "https://api.minimax.io" || process.env.MINIMAX_ALLOW_CUSTOM_ENDPOINT === "true") return url.toString();
+  return official;
+}
+
 export function buildGenerationPrompt(input: {
   topic: string;
   parentTitle?: string;
   clickX?: number;
   clickY?: number;
   memory?: string[];
+  sourceStrictness?: string;
 }) {
   const clickHint =
     typeof input.clickX === "number" && typeof input.clickY === "number"
       ? `The user clicked around ${Math.round(input.clickX * 100)}% from the left and ${Math.round(input.clickY * 100)}% from the top of the parent visual.`
       : "";
   const memoryHint = input.memory?.length ? `Project memory: ${input.memory.join(" | ")}` : "";
+  const sourceHint = input.sourceStrictness ? `Source strictness: ${input.sourceStrictness}. In strict mode, leave explicit room for citations and unsupported-claim warnings.` : "";
   return [
     "Create a mature professional educational visual page for an AI visual encyclopedia.",
     "Use warm ivory and muted yellow tones, clean composition, source-aware explainer style, and legible visual hierarchy.",
@@ -69,7 +84,8 @@ export function buildGenerationPrompt(input: {
     input.parentTitle ? `Parent page: ${input.parentTitle}.` : "",
     `New focus topic: ${input.topic}.`,
     clickHint,
-    memoryHint
+    memoryHint,
+    sourceHint
   ]
     .filter(Boolean)
     .join(" ");

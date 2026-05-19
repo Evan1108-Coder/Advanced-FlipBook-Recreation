@@ -48,7 +48,7 @@ export function HomeHub({
   }
 
   async function submit() {
-    const trimmed = prompt.trim();
+    const trimmed = prompt.trim() || (files.length ? `Create a visual brief from ${files.map((file) => file.name).join(", ")}` : "");
     if (!trimmed || isCreating) return;
     const create = onCreateProject as ((prompt: string, mode: Mode, files: File[]) => void | Promise<void>) | undefined;
     await create?.(trimmed, mode, files);
@@ -130,7 +130,7 @@ export function HomeHub({
                 hidden
                 onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
               />
-              <button type="button" className="create-button" onClick={submit} disabled={!prompt.trim() || isCreating}>
+              <button type="button" className="create-button" onClick={submit} disabled={(!prompt.trim() && files.length === 0) || isCreating}>
                 <Play size={17} aria-hidden />
                 {isCreating ? "Creating" : "Create atlas"}
               </button>
@@ -319,6 +319,10 @@ export function HomeHub({
           margin: 12px 0;
           color: #4b4438;
           line-height: 1.45;
+        }
+        textarea:focus-visible {
+          outline: 2px solid rgba(125, 79, 19, 0.8);
+          outline-offset: 2px;
         }
         .settings-flyout button {
           width: 100%;
@@ -514,7 +518,13 @@ export function HomeHub({
             padding: 14px;
           }
           .creation-stage {
+            order: -1;
             padding-top: 0;
+          }
+          .mode-list {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            max-height: 260px;
+            overflow: auto;
           }
           .settings-flyout {
             left: 0;
@@ -530,7 +540,7 @@ export function HomeHub({
             justify-content: start;
           }
           h1 {
-            font-size: 40px;
+            font-size: 34px;
           }
         }
       `}</style>

@@ -48,6 +48,17 @@ export function WorkspaceCanvas({ bundle, selectedObjectId, onSelect, onExplore,
     () => bundle.objects.find((object) => object.id === selectedObjectId) ?? null,
     [bundle.objects, selectedObjectId]
   );
+  const viewportRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const first = selectedObject ?? bundle.objects[0];
+    if (!first || !viewportRef.current) return;
+    viewportRef.current.scrollTo({
+      left: Math.max(0, first.x - 32),
+      top: Math.max(0, first.y - 96),
+      behavior: "auto"
+    });
+  }, [bundle.project.id]);
 
   useEffect(() => {
     if (!drag) return;
@@ -111,8 +122,11 @@ export function WorkspaceCanvas({ bundle, selectedObjectId, onSelect, onExplore,
     }
 
     onSelect(object.id);
-    if (object.type !== "level") return;
+  }
 
+  function handleObjectDoubleClick(event: React.MouseEvent<HTMLDivElement>, object: CanvasObject) {
+    event.stopPropagation();
+    if (object.type !== "level") return;
     const rect = event.currentTarget.getBoundingClientRect();
     onExplore(object, {
       x: clamp((event.clientX - rect.left) / rect.width),
@@ -151,7 +165,7 @@ export function WorkspaceCanvas({ bundle, selectedObjectId, onSelect, onExplore,
   }
 
   return (
-    <div className="canvas-viewport" onClick={handleCanvasClick} onContextMenu={handleCanvasContextMenu}>
+    <div className="canvas-viewport" ref={viewportRef} onClick={handleCanvasClick} onContextMenu={handleCanvasContextMenu}>
       <div className="canvas-plane" style={{ width: planeSize.width, height: planeSize.height }}>
         <ConnectorLayer objects={bundle.objects} connections={bundle.connections} settings={bundle.settings} width={planeSize.width} height={planeSize.height} />
 
@@ -161,12 +175,20 @@ export function WorkspaceCanvas({ bundle, selectedObjectId, onSelect, onExplore,
             object={object}
             selected={selectedObjectId === object.id}
             onClick={handleObjectClick}
+            onDoubleClick={handleObjectDoubleClick}
             onContextMenu={handleObjectContextMenu}
             onMoveStart={beginMove}
             onResizeStart={beginResize}
             onTool={onTool}
           />
         ))}
+        {bundle.objects.length === 0 ? (
+          <div className="canvas-empty-state">
+            <h2>No canvas objects yet</h2>
+            <p>Start a new Flipbook or return home to create a project from a prompt or source.</p>
+            <button className="primary-button" onClick={() => onTool("new-flipbook")}>Start Flipbook</button>
+          </div>
+        ) : null}
       </div>
 
       {contextMenu ? (
@@ -191,6 +213,7 @@ function CanvasObjectBox({
   object,
   selected,
   onClick,
+  onDoubleClick,
   onContextMenu,
   onMoveStart,
   onResizeStart,
@@ -199,6 +222,7 @@ function CanvasObjectBox({
   object: CanvasObject;
   selected: boolean;
   onClick: (event: React.MouseEvent<HTMLDivElement>, object: CanvasObject) => void;
+  onDoubleClick: (event: React.MouseEvent<HTMLDivElement>, object: CanvasObject) => void;
   onContextMenu: (event: React.MouseEvent, object: CanvasObject) => void;
   onMoveStart: (event: ReactPointerEvent, object: CanvasObject) => void;
   onResizeStart: (event: ReactPointerEvent, object: CanvasObject, corner: ResizeCorner) => void;
@@ -223,9 +247,13 @@ function CanvasObjectBox({
       aria-label={`${object.title} canvas object`}
       aria-pressed={selected}
       onClick={(event) => onClick(event, object)}
+      onDoubleClick={(event) => onDoubleClick(event, object)}
       onContextMenu={(event) => onContextMenu(event, object)}
       onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") event.currentTarget.click();
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onClick(event as unknown as React.MouseEvent<HTMLDivElement>, object);
+        }
       }}
     >
       <div className="object-header" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => onMoveStart(event, object)}>
@@ -247,7 +275,6 @@ function CanvasObjectBox({
       </div>
 
       {object.type === "level" && imageUrl ? (
-        // eslint-disable-next-line @next/next/no-img-element
         <img className="level-image" src={imageUrl} alt={object.title} draggable={false} />
       ) : object.type === "ask" ? (
         <div className="object-body ask-object-body" onClick={(event) => event.stopPropagation()}>
@@ -263,7 +290,7 @@ function CanvasObjectBox({
             className="primary-button"
             disabled={!question.trim()}
             onClick={() => {
-              onTool("ask", object.parentId ?? object.id);
+              onTool(`ask:${question.trim()}`, object.parentId ?? object.id);
               setQuestion("");
             }}
           >

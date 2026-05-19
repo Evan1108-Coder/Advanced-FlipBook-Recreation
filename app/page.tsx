@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChatBubble } from "@/components/ChatBubble";
 import { FloatingToolbar } from "@/components/FloatingToolbar";
 import { HomeHub } from "@/components/HomeHub";
@@ -14,7 +14,10 @@ export default function AppPage() {
   const [bundle, setBundle] = useState<ProjectBundle | null>(null);
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
   const [activePanel, setActivePanel] = useState<PanelSection | null>(null);
+  const [panelMenuOpen, setPanelMenuOpen] = useState(false);
+  const [globalSettingsOpen, setGlobalSettingsOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const frameTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const selectedObject = useMemo(
     () => bundle?.objects.find((object) => object.id === selectedObjectId) ?? null,
     [bundle, selectedObjectId]
@@ -33,13 +36,14 @@ export default function AppPage() {
   async function openProject(projectId: string) {
     const response = await fetch(`/api/projects/${projectId}`, { cache: "no-store" });
     const data = await response.json();
+    if (!response.ok || !data.project) return;
     setBundle(data);
     setSelectedObjectId(data.objects?.[0]?.id ?? null);
   }
 
   async function createProject(prompt: string, mode: Mode, files: File[] = []) {
     const sources = await Promise.all(
-      files.slice(0, 8).map(async (file) => ({
+      files.slice(0, 8).filter((file) => file.size <= 1_000_000).map(async (file) => ({
         title: file.name,
         excerpt: await file.text().then((text) => text.slice(0, 3000)).catch(() => `Uploaded source file: ${file.name}`)
       }))
@@ -50,6 +54,7 @@ export default function AppPage() {
       body: JSON.stringify({ prompt, mode, sources })
     });
     const data = await response.json();
+    if (!response.ok || !data.project) return;
     setBundle(data);
     setSelectedObjectId(data.objects?.[0]?.id ?? null);
     refreshProjects();
@@ -57,6 +62,7 @@ export default function AppPage() {
 
   async function exploreObject(object: CanvasObject, point: { x: number; y: number }) {
     if (!bundle || object.type !== "level") return;
+    if (isGenerating) return;
     setIsGenerating(true);
     try {
       const response = await fetch("/api/generate", {
@@ -80,19 +86,31 @@ export default function AppPage() {
   }
 
   async function runTool(tool: string, objectId = selectedObjectId) {
-    if (!bundle || !objectId) return;
-    if (tool === "sources") {
+    if (!bundle) return;
+    const [toolId, inlinePrompt] = tool.startsWith("ask:") ? ["ask", tool.slice(4)] : [tool, ""];
+    if (toolId === "select" || toolId === "pan") return;
+    if (toolId === "sources") {
       setActivePanel("Sources");
       return;
     }
-    if (tool === "organize") {
+    if (toolId === "organize") {
       organizeCanvas();
       return;
     }
-    if (tool === "new-flipbook") {
-      await createProject("A new visual knowledge flipbook", "flipbook");
+    if (toolId === "new-flipbook") {
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: bundle.project.id, action: "tool", tool: "New Flipbook" })
+      });
+      const data = await response.json();
+      if (response.ok && data.project) {
+        setBundle(data);
+        setSelectedObjectId(data.objects?.at(-1)?.id ?? selectedObjectId);
+      }
       return;
     }
+    if (!objectId) return;
     const response = await fetch("/api/generate", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -100,36 +118,47 @@ export default function AppPage() {
         projectId: bundle.project.id,
         parentId: objectId,
         action: "tool",
-        tool: toolName(tool)
+        tool: toolName(toolId),
+        prompt: inlinePrompt
       })
     });
     const data = await response.json();
+    if (!response.ok || !data.project) return;
     setBundle(data);
     setSelectedObjectId(data.objects?.at(-1)?.id ?? objectId);
   }
 
   async function updateFrame(objectId: string, frame: { x?: number; y?: number; width?: number; height?: number }) {
     if (!bundle) return;
-    setBundle({
-      ...bundle,
-      objects: bundle.objects.map((object) => (object.id === objectId ? { ...object, ...frame } : object))
-    });
-    await fetch(`/api/projects/${bundle.project.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "frame", objectId, frame })
-    });
+    setBundle((current) => current ? {
+      ...current,
+      objects: current.objects.map((object) => (object.id === objectId ? { ...object, ...frame } : object))
+    } : current);
+    clearTimeout(frameTimers.current[objectId]);
+    frameTimers.current[objectId] = setTimeout(() => {
+      void fetch(`/api/projects/${bundle.project.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "frame", objectId, frame })
+      });
+    }, 160);
   }
 
   async function updateSettings(settings: Partial<ProjectSettings>) {
     if (!bundle) return;
     const optimistic = { ...bundle.settings, ...settings };
-    setBundle({ ...bundle, settings: optimistic });
-    await fetch(`/api/projects/${bundle.project.id}`, {
+    setBundle((current) => current ? { ...current, settings: { ...current.settings, ...settings } } : current);
+    const response = await fetch(`/api/projects/${bundle.project.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type: "settings", settings })
     });
+    const data = await response.json();
+    if (response.ok && data.settings) {
+      setBundle((current) => current ? { ...current, settings: data.settings } : current);
+    } else {
+      setBundle((current) => current ? { ...current, settings: optimistic } : current);
+    }
   }
 
   async function deleteObject(objectId: string) {
@@ -139,6 +168,7 @@ export default function AppPage() {
     const response = await fetch(`/api/projects/${bundle.project.id}?objectId=${objectId}${needsConfirm ? "&confirm=true" : ""}`, { method: "DELETE" });
     if (!response.ok) return;
     const data = await response.json();
+    if (!data?.project) return;
     setBundle(data);
     setSelectedObjectId(data.objects?.[0]?.id ?? null);
   }
@@ -151,6 +181,7 @@ export default function AppPage() {
       body: JSON.stringify({ projectId: bundle.project.id, message, selectedObjectId })
     });
     const data = await response.json();
+    if (!response.ok || !data.project) return;
     setBundle(data);
   }
 
@@ -166,21 +197,34 @@ export default function AppPage() {
       ...bundle,
       objects: nextObjects
     });
-    nextObjects.forEach((object) => {
-      void fetch(`/api/projects/${bundle.project.id}`, {
+    void Promise.all(nextObjects.map((object) =>
+      fetch(`/api/projects/${bundle.project.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "frame", objectId: object.id, frame: { x: object.x, y: object.y, width: object.width, height: object.height } })
-      });
-    });
+      })
+    )).then(() => openProject(bundle.project.id));
   }
 
   if (!bundle) {
-    return <HomeHub projects={projects} onCreateProject={createProject} onOpenProject={openProject} />;
+    return (
+      <>
+        <HomeHub projects={projects} onCreateProject={createProject} onOpenProject={openProject} onOpenSettings={() => setGlobalSettingsOpen(true)} />
+        {globalSettingsOpen ? (
+          <div className="global-settings-modal" role="dialog" aria-modal="true" aria-label="Global settings">
+            <div>
+              <h2>Global Settings</h2>
+              <p>New project defaults are local-first: memory on, balanced sources, warm ivory appearance, and MiniMax fallback enabled when no API key is present.</p>
+              <button className="primary-button" onClick={() => setGlobalSettingsOpen(false)}>Close</button>
+            </div>
+          </div>
+        ) : null}
+      </>
+    );
   }
 
   return (
-    <main className="workspace-shell">
+    <main className={`workspace-shell motion-${bundle.settings.animationSpeed}`}>
       <div className="project-topbar">
         <button className="brand-button" onClick={() => setBundle(null)} aria-label="Return home">
           Lumen Atlas
@@ -190,10 +234,10 @@ export default function AppPage() {
           <span>{bundle.objects.length} objects · local SQLite project</span>
         </div>
         <div className="panel-trigger">
-          <button aria-label="Right panel">{activePanel ?? "Panel"}</button>
-          <div className="panel-menu">
+          <button aria-label="Right panel" onClick={() => setPanelMenuOpen((open) => !open)}>{activePanel ?? "Panel"}</button>
+          <div className={`panel-menu ${panelMenuOpen ? "open" : ""}`}>
             {panelSections.map((section) => (
-              <button key={section} onClick={() => setActivePanel(activePanel === section ? null : section)}>
+              <button key={section} onClick={() => { setActivePanel(activePanel === section ? null : section); setPanelMenuOpen(false); }}>
                 {section}
               </button>
             ))}
