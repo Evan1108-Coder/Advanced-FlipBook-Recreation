@@ -668,6 +668,12 @@ button:disabled {
   box-shadow: var(--shadow);
 }
 
+.generation-toast.error {
+  background: #fff5ec;
+  color: #7c2d12;
+  border-color: rgba(180, 83, 9, 0.32);
+}
+
 .global-settings-modal {
   position: fixed;
   inset: 0;

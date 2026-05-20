@@ -15,43 +15,48 @@ export async function generateVisual(input: GenerateImageInput): Promise<{ image
     return { imageUrl: placeholderImage(input.title, "local"), provider: "local-placeholder" };
   }
 
-  const endpoint = resolveMiniMaxEndpoint();
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 30_000);
-  const response = await fetch(endpoint, {
-    method: "POST",
-    signal: controller.signal,
-    headers: {
-      Authorization: `Bearer ${process.env.MINIMAX_API_KEY}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model: "image-01",
-      prompt: input.prompt,
-      aspect_ratio: input.aspectRatio,
-      response_format: "base64",
-      n: 1,
-      prompt_optimizer: input.quality !== "draft"
-    })
-  }).finally(() => clearTimeout(timeout));
+  try {
+    const endpoint = resolveMiniMaxEndpoint();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8_000);
+    const response = await fetch(endpoint, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${process.env.MINIMAX_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: "image-01",
+        prompt: input.prompt,
+        aspect_ratio: input.aspectRatio,
+        response_format: "base64",
+        n: 1,
+        prompt_optimizer: input.quality !== "draft"
+      })
+    }).finally(() => clearTimeout(timeout));
 
-  if (!response.ok) {
-    throw new Error(`MiniMax image generation failed with status ${response.status}.`);
+    if (!response.ok) {
+      throw new Error(`MiniMax image generation failed with status ${response.status}.`);
+    }
+    const length = Number(response.headers.get("content-length") ?? 0);
+    if (Number.isFinite(length) && length > 8_000_000) throw new Error("MiniMax response was too large.");
+
+    const json = await response.json();
+    const base64 = json?.data?.image_base64?.[0];
+    if (typeof base64 !== "string" || base64.length > 8_000_000) {
+      throw new Error("MiniMax response did not include data.image_base64[0].");
+    }
+
+    const fileName = `${makeId("minimax")}.jpeg`;
+    const filePath = path.join(process.cwd(), "public", "generated", fileName);
+    await fs.mkdir(path.dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, Buffer.from(base64, "base64"));
+    return { imageUrl: `/generated/${fileName}`, provider: "minimax-image-01" };
+  } catch (error) {
+    console.warn("MiniMax generation failed; using local fallback image.", error);
+    return { imageUrl: placeholderImage(input.title, "fallback"), provider: "local-fallback" };
   }
-  const length = Number(response.headers.get("content-length") ?? 0);
-  if (Number.isFinite(length) && length > 8_000_000) throw new Error("MiniMax response was too large.");
-
-  const json = await response.json();
-  const base64 = json?.data?.image_base64?.[0];
-  if (typeof base64 !== "string" || base64.length > 8_000_000) {
-    throw new Error("MiniMax response did not include data.image_base64[0].");
-  }
-
-  const fileName = `${makeId("minimax")}.jpeg`;
-  const filePath = path.join(process.cwd(), "public", "generated", fileName);
-  await fs.mkdir(path.dirname(filePath), { recursive: true });
-  await fs.writeFile(filePath, Buffer.from(base64, "base64"));
-  return { imageUrl: `/generated/${fileName}`, provider: "minimax-image-01" };
 }
 
 function resolveMiniMaxEndpoint() {

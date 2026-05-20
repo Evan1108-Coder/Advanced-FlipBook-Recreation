@@ -17,6 +17,7 @@ export default function AppPage() {
   const [panelMenuOpen, setPanelMenuOpen] = useState(false);
   const [globalSettingsOpen, setGlobalSettingsOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const frameTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const selectedObject = useMemo(
     () => bundle?.objects.find((object) => object.id === selectedObjectId) ?? null,
@@ -64,6 +65,7 @@ export default function AppPage() {
     if (!bundle || object.type !== "level") return;
     if (isGenerating) return;
     setIsGenerating(true);
+    setGenerationError(null);
     try {
       const response = await fetch("/api/generate", {
         method: "POST",
@@ -76,10 +78,12 @@ export default function AppPage() {
           clickY: point.y
         })
       });
-      const data = await response.json();
+      const data = await readJson(response);
       if (!response.ok) throw new Error(data.error ?? "Generation failed");
       setBundle(data);
       setSelectedObjectId(data.objects?.at(-1)?.id ?? object.id);
+    } catch (error) {
+      setGenerationError(error instanceof Error ? error.message : "Generation failed. Please try again.");
     } finally {
       setIsGenerating(false);
     }
@@ -98,34 +102,44 @@ export default function AppPage() {
       return;
     }
     if (toolId === "new-flipbook") {
-      const response = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: bundle.project.id, action: "tool", tool: "New Flipbook" })
-      });
-      const data = await response.json();
-      if (response.ok && data.project) {
-        setBundle(data);
-        setSelectedObjectId(data.objects?.at(-1)?.id ?? selectedObjectId);
+      try {
+        const response = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ projectId: bundle.project.id, action: "tool", tool: "New Flipbook" })
+        });
+        const data = await readJson(response);
+        if (!response.ok) throw new Error(data.error ?? "New Flipbook failed");
+        if (data.project) {
+          setBundle(data);
+          setSelectedObjectId(data.objects?.at(-1)?.id ?? selectedObjectId);
+        }
+      } catch (error) {
+        setGenerationError(error instanceof Error ? error.message : "New Flipbook failed. Please try again.");
       }
       return;
     }
     if (!objectId) return;
-    const response = await fetch("/api/generate", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        projectId: bundle.project.id,
-        parentId: objectId,
-        action: "tool",
-        tool: toolName(toolId),
-        prompt: inlinePrompt
-      })
-    });
-    const data = await response.json();
-    if (!response.ok || !data.project) return;
-    setBundle(data);
-    setSelectedObjectId(data.objects?.at(-1)?.id ?? objectId);
+    try {
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId: bundle.project.id,
+          parentId: objectId,
+          action: "tool",
+          tool: toolName(toolId),
+          prompt: inlinePrompt
+        })
+      });
+      const data = await readJson(response);
+      if (!response.ok) throw new Error(data.error ?? "Tool failed");
+      if (!data.project) return;
+      setBundle(data);
+      setSelectedObjectId(data.objects?.at(-1)?.id ?? objectId);
+    } catch (error) {
+      setGenerationError(error instanceof Error ? error.message : "Tool failed. Please try again.");
+    }
   }
 
   async function updateFrame(objectId: string, frame: { x?: number; y?: number; width?: number; height?: number }) {
@@ -256,6 +270,7 @@ export default function AppPage() {
       />
 
       {isGenerating ? <div className="generation-toast">Generating next visual level...</div> : null}
+      {!isGenerating && generationError ? <div className="generation-toast error">{generationError}</div> : null}
 
       <FloatingToolbar selectedObject={selectedObject} settings={bundle.settings} onTool={runTool} />
 
@@ -287,4 +302,12 @@ function toolName(tool: string) {
     export: "Export"
   };
   return names[tool] ?? tool;
+}
+
+async function readJson(response: Response) {
+  try {
+    return await response.json();
+  } catch {
+    return {};
+  }
 }

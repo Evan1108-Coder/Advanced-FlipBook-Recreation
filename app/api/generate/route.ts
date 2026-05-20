@@ -44,30 +44,26 @@ export async function POST(request: Request) {
     const tool = typeof body.tool === "string" ? body.tool : "Learn";
     if (["Select", "Pan"].includes(tool)) return NextResponse.json(bundle);
     if (tool === "Regenerate" && parent.type === "level") {
-      try {
-        const prompt = buildGenerationPrompt({
-          topic: parent.title,
-          parentTitle: parent.title,
-          memory: bundle.settings.memoryEnabled ? bundle.memory.slice(0, 5).map((item) => item.text) : [],
-          sourceStrictness: bundle.settings.sourceStrictness
-        });
-        const visual = await generateVisual({
-          title: parent.title,
-          prompt,
-          aspectRatio: bundle.settings.defaultAspectRatio,
-          quality: bundle.settings.minimaxQuality
-        });
-        const next = updateObjectPayload(body.projectId, body.parentId, {
-          imageUrl: visual.imageUrl,
-          provider: visual.provider,
-          regeneratedAt: new Date().toISOString(),
-          status: "ready"
-        });
-        if (!next) return NextResponse.json({ error: "Object no longer exists" }, { status: 409 });
-        return NextResponse.json(next);
-      } catch {
-        return NextResponse.json({ error: "Image regeneration failed." }, { status: 502 });
-      }
+      const prompt = buildGenerationPrompt({
+        topic: parent.title,
+        parentTitle: parent.title,
+        memory: bundle.settings.memoryEnabled ? bundle.memory.slice(0, 5).map((item) => item.text) : [],
+        sourceStrictness: bundle.settings.sourceStrictness
+      });
+      const visual = await generateVisual({
+        title: parent.title,
+        prompt,
+        aspectRatio: bundle.settings.defaultAspectRatio,
+        quality: bundle.settings.minimaxQuality
+      });
+      const next = updateObjectPayload(body.projectId, body.parentId, {
+        imageUrl: visual.imageUrl,
+        provider: visual.provider,
+        regeneratedAt: new Date().toISOString(),
+        status: "ready"
+      });
+      if (!next) return NextResponse.json({ error: "Object no longer exists" }, { status: 409 });
+      return NextResponse.json(next);
     }
     const next = createToolResult({ projectId: body.projectId, fromId: body.parentId, tool, prompt: cleanPrompt(body.prompt, "") });
     if (!next) return NextResponse.json({ error: "Object no longer exists" }, { status: 409 });
@@ -86,29 +82,25 @@ export async function POST(request: Request) {
     sourceStrictness: bundle.settings.sourceStrictness
   });
 
-  try {
-    const visual = await generateVisual({
-      title: topic,
-      prompt,
-      aspectRatio: bundle.settings.defaultAspectRatio,
-      quality: bundle.settings.minimaxQuality
-    });
-    const next = createChildLevel({
-      projectId: body.projectId,
-      parentId: body.parentId,
-      clickX,
-      clickY,
-      title: topic,
-      summary: `A deeper visual level about ${topic}, branched from ${parent.title}.`,
-      transcript: `${topic} expands the selected part of ${parent.title}. This transcript is stored separately from the generated image so it can stay readable, searchable, and source-aware.`,
-      imageUrl: visual.imageUrl,
-      provider: visual.provider,
-      remember: bundle.settings.memoryEnabled
-    });
-    return NextResponse.json(next);
-  } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Generation failed" }, { status: 500 });
-  }
+  const visual = await generateVisual({
+    title: topic,
+    prompt,
+    aspectRatio: bundle.settings.defaultAspectRatio,
+    quality: bundle.settings.minimaxQuality
+  });
+  const next = createChildLevel({
+    projectId: body.projectId,
+    parentId: body.parentId,
+    clickX,
+    clickY,
+    title: topic,
+    summary: `A deeper visual level about ${topic}, branched from ${parent.title}.`,
+    transcript: `${topic} expands the selected part of ${parent.title}. This transcript is stored separately from the generated image so it can stay readable, searchable, and source-aware.`,
+    imageUrl: visual.imageUrl,
+    provider: visual.provider,
+    remember: bundle.settings.memoryEnabled
+  });
+  return NextResponse.json(next);
 }
 
 function inferTopic(parentTitle: string, x: number, y: number) {
