@@ -1,6 +1,6 @@
-# Setup Guide — Lumen Atlas
+# Setup Guide — Advanced FlipBook Recreation
 
-Complete guide to installing, configuring, and running Lumen Atlas locally.
+Complete guide to installing, configuring, and running Advanced FlipBook Recreation locally.
 
 ---
 
@@ -178,7 +178,7 @@ PORT=8080 npm start
 
 ## Database Setup
 
-Lumen Atlas uses SQLite for local persistence. The database is created automatically on first use.
+Advanced FlipBook Recreation uses SQLite for local persistence. The database is created automatically on first use.
 
 ### Default Location
 

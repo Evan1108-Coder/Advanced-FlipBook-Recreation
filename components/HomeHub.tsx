@@ -55,14 +55,14 @@ export function HomeHub({
   }
 
   return (
-    <main className="lumen-home" aria-label="Lumen Atlas home">
+    <main className="lumen-home" aria-label="Advanced FlipBook Recreation home">
       <aside className="feature-panel" aria-label="Feature modes">
         <div className="brand-mark">
           <div className="brand-icon">
             <Sparkles size={18} aria-hidden />
           </div>
           <div>
-            <strong>Lumen Atlas</strong>
+            <strong>Advanced FlipBook</strong>
             <span>Visual knowledge workspace</span>
           </div>
         </div>

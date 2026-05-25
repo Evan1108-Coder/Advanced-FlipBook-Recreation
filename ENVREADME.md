@@ -1,6 +1,6 @@
-# Environment Variables — Lumen Atlas
+# Environment Variables — Advanced FlipBook Recreation
 
-Complete reference for all environment variables used by Lumen Atlas.
+Complete reference for all environment variables used by Advanced FlipBook Recreation.
 
 ---
 
@@ -24,7 +24,7 @@ Edit `.env.local` with your values. The `.env.local` file is gitignored and will
 | **Default** | _(empty)_ |
 | **Example** | `MINIMAX_API_KEY=eyJhbGciOiJSUzI1NiIsInR5cCI6...` |
 
-Your MiniMax API key for AI image generation. When set, Lumen Atlas generates real AI images using MiniMax's `image-01` model. When empty, deterministic SVG placeholders are used instead.
+Your MiniMax API key for AI image generation. When set, Advanced FlipBook Recreation generates real AI images using MiniMax's `image-01` model. When empty, deterministic SVG placeholders are used instead.
 
 **How to get a key**:
 1. Create an account at [minimax.io](https://www.minimax.io/)
@@ -111,7 +111,7 @@ When set to `true`, allows API requests from non-localhost origins. By default, 
 - `false` (default): Only local browser can access the API — safe for personal use
 - `true`: Any network client can reach the API — use only if you need remote access (e.g., accessing from another device on LAN)
 
-> If you're only using Lumen Atlas on your local machine, leave this as `false`.
+> If you're only using Advanced FlipBook Recreation on your local machine, leave this as `false`.
 
 ---
 

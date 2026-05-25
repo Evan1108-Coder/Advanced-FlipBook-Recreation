@@ -4,7 +4,7 @@ This document is the coordination brief for any coding or testing agents.
 
 ## Product Shape
 
-Build Lumen Atlas as a local-first professional AI visual knowledge workspace. The main workspace is an infinite canvas. The flagship object is a Flipbook where each level is a generated visual page. Clicking regions creates connected child levels. Tools produce connected result boxes.
+Build Advanced FlipBook Recreation as a local-first professional AI visual knowledge workspace. The main workspace is an infinite canvas. The flagship object is a Flipbook where each level is a generated visual page. Clicking regions creates connected child levels. Tools produce connected result boxes.
 
 ## Non-Negotiables
 

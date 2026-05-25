@@ -261,7 +261,7 @@ export default function AppPage() {
     <main className={`workspace-shell motion-${bundle.settings.animationSpeed}`}>
       <div className="project-topbar">
         <button className="brand-button" onClick={() => setBundle(null)} aria-label="Return home">
-          Lumen Atlas
+          Advanced FlipBook
         </button>
         <div>
           <strong>{bundle.project.name}</strong>

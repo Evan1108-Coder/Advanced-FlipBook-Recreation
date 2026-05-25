@@ -11,7 +11,7 @@ export function assertLocalRequest(request: Request) {
     host.startsWith("[::1]:") ||
     host === "localhost" ||
     host === "127.0.0.1";
-  return allowed ? null : NextResponse.json({ error: "Lumen Atlas API is local-only by default." }, { status: 403 });
+  return allowed ? null : NextResponse.json({ error: "Advanced FlipBook Recreation API is local-only by default." }, { status: 403 });
 }
 
 export async function readJsonBody(request: Request) {

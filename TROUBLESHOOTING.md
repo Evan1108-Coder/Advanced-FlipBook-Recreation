@@ -1,6 +1,6 @@
-# Troubleshooting — Lumen Atlas
+# Troubleshooting — Advanced FlipBook Recreation
 
-Solutions for common issues when setting up, running, or using Lumen Atlas.
+Solutions for common issues when setting up, running, or using Advanced FlipBook Recreation.
 
 ---
 

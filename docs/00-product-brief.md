@@ -1,6 +1,6 @@
-# Lumen Atlas Product Brief
+# Advanced FlipBook Recreation Product Brief
 
-Lumen Atlas is a local-first AI visual knowledge workspace. It combines the spirit of Flipbook's infinite generated visual browser with a professional canvas, project memory, source-aware learning tools, and structured outputs for research, teaching, visual thinking, and self-directed discovery.
+Advanced FlipBook Recreation is a local-first AI visual knowledge workspace. It combines the spirit of Flipbook's infinite generated visual browser with a professional canvas, project memory, source-aware learning tools, and structured outputs for research, teaching, visual thinking, and self-directed discovery.
 
 ## Product Promise
 
@@ -30,7 +30,7 @@ The product should feel calm, capable, and professional. It should not feel chil
 
 - Flipbook Page: an AI-native infinite visual browser where each page is generated as pixels in real time, and users click anywhere to continue exploring.
 - MiniMax API docs: current image generation endpoint is `POST https://api.minimax.io/v1/image_generation` with `model: image-01`, prompt, aspect ratio, and `response_format` of `base64` or `url`.
-- Dzine-style inspiration: use a left feature panel, central creation box, recent projects, and a polished creative-workspace feel, adapted to Lumen Atlas rather than copied.
+- Dzine-style inspiration: use a left feature panel, central creation box, recent projects, and a polished creative-workspace feel, adapted to Advanced FlipBook Recreation rather than copied.
 
 ## MVP Definition
 

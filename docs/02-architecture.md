@@ -82,7 +82,7 @@ Risky actions require confirmation:
 
 ## Source-Aware Text
 
-Generated image text should not be trusted as the authoritative transcript. Lumen Atlas stores real structured text separately:
+Generated image text should not be trusted as the authoritative transcript. Advanced FlipBook Recreation stores real structured text separately:
 
 - Transcript
 - Claims

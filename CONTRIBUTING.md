@@ -1,6 +1,6 @@
-# Contributing — Lumen Atlas
+# Contributing — Advanced FlipBook Recreation
 
-Guidelines for contributing to the Lumen Atlas project.
+Guidelines for contributing to the Advanced FlipBook Recreation project.
 
 ---
 

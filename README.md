@@ -1,4 +1,4 @@
-# Lumen Atlas
+# Advanced FlipBook Recreation
 
 **A local-first AI visual knowledge workspace** where users generate interactive flipbooks, explore topics by clicking visual regions, branch into connected pages, and use tools like Learn, Ask, Analyze, Compare, Timeline, Sources, and Study Guide on an infinite canvas.
 
@@ -179,7 +179,7 @@ Advanced-FlipBook-Recreation/
 
 ## Feature Modes
 
-Lumen Atlas supports 8 distinct feature modes, each shaping how content is generated and displayed:
+Advanced FlipBook Recreation supports 8 distinct feature modes, each shaping how content is generated and displayed:
 
 | Mode | Description | Use Case |
 |------|------------|----------|
@@ -310,7 +310,7 @@ When no API key is configured (or on request failure):
 
 ## Database Schema
 
-Lumen Atlas uses SQLite (via better-sqlite3) with WAL mode and foreign keys enabled.
+Advanced FlipBook Recreation uses SQLite (via better-sqlite3) with WAL mode and foreign keys enabled.
 
 ### Tables
 
