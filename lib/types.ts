@@ -104,6 +104,8 @@ export type ProjectSettings = {
   animationSpeed: "reduced" | "normal" | "expressive";
   minimaxQuality: "draft" | "balanced" | "high";
   defaultAspectRatio: "1:1" | "4:3" | "16:9";
+  textModel: string | null;
+  imageModel: string | null;
 };
 
 export type ProjectBundle = {

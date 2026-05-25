@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { assertLocalRequest, readJsonBody } from "@/lib/api";
 import { createChildLevel, createProjectRootObject, createToolResult, getProjectBundle, updateObjectPayload } from "@/lib/db";
-import { buildGenerationPrompt, generateVisual } from "@/lib/minimax";
+import { buildGenerationPrompt, generateVisual as minimaxGenerateVisual } from "@/lib/minimax";
+import { generateImage } from "@/lib/providers/registry";
 import { clampNumber, cleanPrompt } from "@/lib/validation";
 
 export async function POST(request: Request) {
@@ -50,12 +51,7 @@ export async function POST(request: Request) {
         memory: bundle.settings.memoryEnabled ? bundle.memory.slice(0, 5).map((item) => item.text) : [],
         sourceStrictness: bundle.settings.sourceStrictness
       });
-      const visual = await generateVisual({
-        title: parent.title,
-        prompt,
-        aspectRatio: bundle.settings.defaultAspectRatio,
-        quality: bundle.settings.minimaxQuality
-      });
+      const visual = await resolveImage(prompt, parent.title, bundle.settings);
       const next = updateObjectPayload(body.projectId, body.parentId, {
         imageUrl: visual.imageUrl,
         provider: visual.provider,
@@ -82,12 +78,7 @@ export async function POST(request: Request) {
     sourceStrictness: bundle.settings.sourceStrictness
   });
 
-  const visual = await generateVisual({
-    title: topic,
-    prompt,
-    aspectRatio: bundle.settings.defaultAspectRatio,
-    quality: bundle.settings.minimaxQuality
-  });
+  const visual = await resolveImage(prompt, topic, bundle.settings);
   const next = createChildLevel({
     projectId: body.projectId,
     parentId: body.parentId,
@@ -101,6 +92,27 @@ export async function POST(request: Request) {
     remember: bundle.settings.memoryEnabled
   });
   return NextResponse.json(next);
+}
+
+import type { ProjectSettings } from "@/lib/types";
+
+async function resolveImage(prompt: string, title: string, settings: ProjectSettings): Promise<{ imageUrl: string; provider: string }> {
+  if (settings.imageModel) {
+    try {
+      const result = await generateImage(prompt, {
+        model: settings.imageModel,
+        aspectRatio: settings.defaultAspectRatio,
+        quality: settings.minimaxQuality,
+      });
+      if (result) return result;
+    } catch { /* fall through to minimax */ }
+  }
+  return minimaxGenerateVisual({
+    title,
+    prompt,
+    aspectRatio: settings.defaultAspectRatio,
+    quality: settings.minimaxQuality,
+  });
 }
 
 function inferTopic(parentTitle: string, x: number, y: number) {

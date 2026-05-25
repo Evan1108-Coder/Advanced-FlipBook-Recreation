@@ -101,7 +101,9 @@ function defaultSettingsShim(): ProjectSettings {
     connectorStyle: "soft",
     animationSpeed: "normal",
     minimaxQuality: "balanced",
-    defaultAspectRatio: "16:9"
+    defaultAspectRatio: "16:9",
+    textModel: null,
+    imageModel: null,
   };
 }
 

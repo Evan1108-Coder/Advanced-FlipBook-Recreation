@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import type { ProjectSettings } from "@/lib/types";
 
 type SettingsSection = "project" | "chat" | "all";
@@ -152,6 +152,63 @@ function NumberField({
   );
 }
 
+type ModelDef = { id: string; name: string; provider: string; capabilities: string[]; costTier: string };
+type ModelsResponse = { text: ModelDef[]; image: ModelDef[]; vision: ModelDef[] };
+
+function ModelSelectors({ settings, onSettingsChange }: { settings: ProjectSettings; onSettingsChange: (partial: Partial<ProjectSettings>) => void }) {
+  const [models, setModels] = useState<ModelsResponse | null>(null);
+
+  useEffect(() => {
+    fetch("/api/models").then((r) => r.json()).then(setModels).catch(() => {});
+  }, []);
+
+  if (!models) return null;
+
+  const hasText = models.text.length > 0;
+  const hasImage = models.image.length > 0;
+
+  if (!hasText && !hasImage) {
+    return (
+      <div style={{ ...fieldStyle, padding: "8px 0" }}>
+        <span style={{ ...labelStyle, color: "#a0522d" }}>No AI models configured</span>
+        <span style={helpStyle}>
+          Add API keys to .env.local for AI features. Supported: OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY, GROQ_API_KEY, MINIMAX_API_KEY, MOONSHOT_API_KEY.
+        </span>
+      </div>
+    );
+  }
+
+  const warning = hasText && !hasImage
+    ? "No image model configured — using SVG placeholders. Add MINIMAX_API_KEY or OPENAI_API_KEY for real images."
+    : !hasText && hasImage
+      ? "No text model configured — chat will use template responses. Add a text model API key for AI chat."
+      : null;
+
+  return (
+    <div style={groupStyle}>
+      {warning ? <span style={{ ...helpStyle, color: "#a0522d" }}>{warning}</span> : null}
+      {hasText ? (
+        <SelectField
+          label="Text model"
+          help="Used for chat, content generation, and summaries."
+          value={settings.textModel ?? models.text[0].id}
+          options={models.text.map((m) => ({ value: m.id, label: `${m.name} (${m.provider})` }))}
+          onChange={(textModel) => onSettingsChange({ textModel })}
+        />
+      ) : null}
+      {hasImage ? (
+        <SelectField
+          label="Image model"
+          help="Used for generating flipbook visuals and pages."
+          value={settings.imageModel ?? models.image[0].id}
+          options={models.image.map((m) => ({ value: m.id, label: `${m.name} (${m.provider})` }))}
+          onChange={(imageModel) => onSettingsChange({ imageModel })}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 export function SettingsControls({ settings, section = "all", onSettingsChange }: SettingsControlsProps) {
   const showProject = section === "project" || section === "all";
   const showChat = section === "chat" || section === "all";
@@ -214,8 +271,10 @@ export function SettingsControls({ settings, section = "all", onSettingsChange }
             ]}
             value={settings.animationSpeed}
           />
+          <ModelSelectors settings={settings} onSettingsChange={onSettingsChange} />
           <SelectField
-            label="MiniMax quality"
+            label="Image quality"
+            help="Controls prompt optimization and quality level for image generation."
             onChange={(minimaxQuality) => onSettingsChange({ minimaxQuality })}
             options={[
               { value: "draft", label: "Draft" },

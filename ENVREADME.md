@@ -14,7 +14,78 @@ Edit `.env.local` with your values. The `.env.local` file is gitignored and will
 
 ---
 
+## Model Requirements
+
+Advanced FlipBook Recreation uses **two types of AI models**:
+
+- **Text model** — Powers the chat assistant, content generation, and summaries
+- **Image model** — Generates flipbook page visuals
+
+For full functionality, you need at least one key for each type. If you only have one type:
+- No text model → Chat uses template responses (no AI reasoning)
+- No image model → Pages use SVG placeholders (still fully navigable)
+
+The app auto-detects available models from which API keys are set.
+
+---
+
 ## Variables Reference
+
+### Text Model Providers
+
+#### `OPENAI_API_KEY`
+
+| | |
+|---|---|
+| **Required** | No |
+| **Default** | _(empty)_ |
+| **Models** | gpt-4o-mini (text, low cost), gpt-4o (text + vision), DALL-E 3 (image) |
+
+Enables OpenAI models. With this single key you get both text AND image capabilities.
+
+#### `ANTHROPIC_API_KEY`
+
+| | |
+|---|---|
+| **Required** | No |
+| **Default** | _(empty)_ |
+| **Models** | Claude Sonnet 4.6 (text + vision), Claude Haiku 4.5 (text, low cost) |
+
+Enables Anthropic Claude models for text chat.
+
+#### `GOOGLE_API_KEY`
+
+| | |
+|---|---|
+| **Required** | No |
+| **Default** | _(empty)_ |
+| **Models** | Gemini 3 Flash (text, low cost), Gemini 3.1 Pro (text + vision) |
+
+Enables Google Gemini models. Get a key from [AI Studio](https://aistudio.google.com/).
+
+#### `GROQ_API_KEY`
+
+| | |
+|---|---|
+| **Required** | No |
+| **Default** | _(empty)_ |
+| **Models** | Llama 3.3 70B (text, free tier available) |
+
+Enables Llama models via Groq's fast inference. Free tier available at [groq.com](https://groq.com).
+
+#### `MOONSHOT_API_KEY`
+
+| | |
+|---|---|
+| **Required** | No |
+| **Default** | _(empty)_ |
+| **Models** | Kimi K2 Turbo (text), Kimi K2.5 Vision (text + vision) |
+
+Enables Moonshot/Kimi models.
+
+---
+
+### Image Model Providers
 
 ### `MINIMAX_API_KEY`
 

@@ -36,7 +36,9 @@ export const defaultProjectSettings: ProjectSettings = {
   connectorStyle: "soft",
   animationSpeed: "normal",
   minimaxQuality: "balanced",
-  defaultAspectRatio: "16:9"
+  defaultAspectRatio: "16:9",
+  textModel: null,
+  imageModel: null,
 };
 
 export const toolDefinitions = [
