@@ -48,37 +48,25 @@ Built with Next.js 16, React 19, TypeScript, and SQLite — all data stays on yo
 
 ## Architecture Overview
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                        Next.js App Router                    │
-│                                                              │
-│  ┌──────────┐  ┌────────────────┐  ┌──────────────────────┐ │
-│  │ HomeHub  │  │ WorkspaceCanvas│  │   Right Panel (11)   │ │
-│  │          │  │                │  │   Sources, Settings,  │ │
-│  │ Mode     │  │ Objects        │  │   Memory, Inspector,  │ │
-│  │ Selector │  │ Connections    │  │   Transcript, Claims, │ │
-│  │ Prompt   │  │ Context Menus  │  │   Notes, Versions,    │ │
-│  │ Recent   │  │ Drag/Resize    │  │   Export, Check       │ │
-│  └──────────┘  └────────────────┘  └──────────────────────┘ │
-│                                                              │
-│  ┌──────────────────┐  ┌─────────────────────────────────┐  │
-│  │ FloatingToolbar   │  │          ChatBubble             │  │
-│  │ (12 tools)        │  │ (compact/expanded, operators)   │  │
-│  └──────────────────┘  └─────────────────────────────────┘  │
-│                                                              │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │                    API Routes                         │   │
-│  │  /api/projects  /api/generate  /api/chat              │   │
-│  └──────────────────────────────────────────────────────┘   │
-│                           │                                  │
-│  ┌──────────────────┐  ┌──────────────────────────────┐     │
-│  │  SQLite (db.ts)  │  │  MiniMax API (minimax.ts)    │     │
-│  │  782 lines       │  │  + SVG placeholder fallback   │     │
-│  └──────────────────┘  └──────────────────────────────┘     │
-└─────────────────────────────────────────────────────────────┘
-```
+The app is built on **Next.js App Router** with three main UI layers and two backend services:
 
-**Data flows top-down**: UI components call API routes via fetch. API routes use `lib/db.ts` for persistence and `lib/minimax.ts` for image generation. All state is stored in SQLite and re-fetched on page load.
+**UI Components:**
+- **HomeHub** — Landing page with mode selector, prompt input, and recent projects
+- **WorkspaceCanvas** — Infinite canvas with drag/resize, objects, connections, and context menus
+- **RightPanel** — 11 collapsible sections: Sources, Settings, Memory, Inspector, Transcript, Claims, Notes, Versions, Export, Check Understanding
+- **FloatingToolbar** — 12 canvas tools (Learn, Ask, Analysis, Compare, Timeline, etc.)
+- **ChatBubble** — AI chat interface with compact/expanded modes and operator actions
+
+**API Routes:**
+- `/api/projects` — CRUD for projects
+- `/api/generate` — Image generation and tool execution
+- `/api/chat` — Chat messages
+
+**Backend Services:**
+- `lib/db.ts` — SQLite database layer (782 lines) for all persistence
+- `lib/minimax.ts` — MiniMax image-01 API client with SVG placeholder fallback
+
+Data flows top-down: UI components call API routes via fetch. API routes use `lib/db.ts` for persistence and `lib/minimax.ts` for image generation. All state is stored in SQLite and re-fetched on page load.
 
 ---
 
