@@ -139,7 +139,7 @@ function SourcesSection({ bundle }: { bundle: ProjectBundle }) {
                 <span style={{ ...mutedStyle, textTransform: "capitalize" }}>{source.quality}</span>
               </div>
               {source.url ? (
-                <a href={source.url} style={{ color: "#3f6f5d", fontSize: 12, overflowWrap: "anywhere" }}>
+                <a href={source.url} target="_blank" rel="noopener noreferrer" style={{ color: "#3f6f5d", fontSize: 12, overflowWrap: "anywhere" }}>
                   {source.url}
                 </a>
               ) : null}
@@ -305,7 +305,7 @@ function ExportSection({ bundle, object }: { bundle: ProjectBundle; object?: Can
         <span style={mutedStyle}>Sources: {bundle.sources.length}</span>
       </div>
       <textarea readOnly value={markdown} style={{ minHeight: 160, border: "1px solid #e1d7c9", borderRadius: 8, padding: 10, resize: "vertical" }} />
-      <button style={{ border: "1px solid #d8cdbc", borderRadius: 8, background: "#2f2923", color: "#fffaf0", padding: "8px 10px" }} onClick={() => navigator.clipboard?.writeText(markdown)}>
+      <button style={{ border: "1px solid #d8cdbc", borderRadius: 8, background: "#2f2923", color: "#fffaf0", padding: "8px 10px" }} onClick={() => { navigator.clipboard?.writeText(markdown).catch(() => {}); }}>
         Copy Markdown Export
       </button>
     </div>
@@ -395,10 +395,12 @@ export function RightPanel({
     const stop = () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
     };
 
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", stop, { once: true });
+    window.addEventListener("pointercancel", stop, { once: true });
   };
 
   const content = (() => {

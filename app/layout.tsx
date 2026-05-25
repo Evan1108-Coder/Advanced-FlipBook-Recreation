@@ -3,7 +3,8 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Lumen Atlas",
-  description: "Local-first AI visual knowledge workspace."
+  description: "Local-first AI visual knowledge workspace.",
+  icons: []
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

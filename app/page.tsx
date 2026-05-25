@@ -29,9 +29,13 @@ export default function AppPage() {
   }, []);
 
   async function refreshProjects() {
-    const response = await fetch("/api/projects", { cache: "no-store" });
-    const data = await response.json();
-    setProjects(data.projects ?? []);
+    try {
+      const response = await fetch("/api/projects", { cache: "no-store" });
+      const data = await response.json();
+      setProjects(data.projects ?? []);
+    } catch {
+      setProjects([]);
+    }
   }
 
   async function openProject(projectId: string) {
@@ -144,13 +148,14 @@ export default function AppPage() {
 
   async function updateFrame(objectId: string, frame: { x?: number; y?: number; width?: number; height?: number }) {
     if (!bundle) return;
+    const projectId = bundle.project.id;
     setBundle((current) => current ? {
       ...current,
       objects: current.objects.map((object) => (object.id === objectId ? { ...object, ...frame } : object))
     } : current);
     clearTimeout(frameTimers.current[objectId]);
     frameTimers.current[objectId] = setTimeout(() => {
-      void fetch(`/api/projects/${bundle.project.id}`, {
+      void fetch(`/api/projects/${projectId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "frame", objectId, frame })
@@ -162,15 +167,19 @@ export default function AppPage() {
     if (!bundle) return;
     const optimistic = { ...bundle.settings, ...settings };
     setBundle((current) => current ? { ...current, settings: { ...current.settings, ...settings } } : current);
-    const response = await fetch(`/api/projects/${bundle.project.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "settings", settings })
-    });
-    const data = await response.json();
-    if (response.ok && data.settings) {
-      setBundle((current) => current ? { ...current, settings: data.settings } : current);
-    } else {
+    try {
+      const response = await fetch(`/api/projects/${bundle.project.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "settings", settings })
+      });
+      const data = await response.json();
+      if (response.ok && data.settings) {
+        setBundle((current) => current ? { ...current, settings: data.settings } : current);
+      } else {
+        setBundle((current) => current ? { ...current, settings: optimistic } : current);
+      }
+    } catch {
       setBundle((current) => current ? { ...current, settings: optimistic } : current);
     }
   }
@@ -189,14 +198,21 @@ export default function AppPage() {
 
   async function sendChat(message: string) {
     if (!bundle) return;
-    const response = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ projectId: bundle.project.id, message, selectedObjectId })
-    });
-    const data = await response.json();
-    if (!response.ok || !data.project) return;
-    setBundle(data);
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: bundle.project.id, message, selectedObjectId })
+      });
+      const data = await response.json();
+      if (!response.ok || !data.project) {
+        setGenerationError("Chat message failed. Please try again.");
+        return;
+      }
+      setBundle(data);
+    } catch {
+      setGenerationError("Chat message failed. Please try again.");
+    }
   }
 
   function organizeCanvas() {
@@ -211,13 +227,17 @@ export default function AppPage() {
       ...bundle,
       objects: nextObjects
     });
-    void Promise.all(nextObjects.map((object) =>
+    void Promise.allSettled(nextObjects.map((object) =>
       fetch(`/api/projects/${bundle.project.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "frame", objectId: object.id, frame: { x: object.x, y: object.y, width: object.width, height: object.height } })
       })
-    )).then(() => openProject(bundle.project.id));
+    )).then((results) => {
+      const failures = results.filter((r) => r.status === "rejected").length;
+      if (failures > 0) setGenerationError(`Failed to save ${failures} object position(s).`);
+      openProject(bundle.project.id);
+    });
   }
 
   if (!bundle) {

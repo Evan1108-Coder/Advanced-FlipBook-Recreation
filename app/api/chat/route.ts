@@ -24,8 +24,10 @@ export async function POST(request: Request) {
   if (!bundle.settings.chatOperatorEnabled && (lower.includes("learn") || lower.includes("strict source") || lower.includes("strict sources"))) {
     reply = "Operator actions are disabled for this project, so I can advise but will not change the canvas or settings.";
   } else if (lower.includes("learn") && selected) {
-    createToolResult({ projectId: body.projectId, fromId: selected.id, tool: "Learn", prompt: message });
-    reply = `Done. I created a Learn result connected to ${selected.title}.`;
+    const result = createToolResult({ projectId: body.projectId, fromId: selected.id, tool: "Learn", prompt: message });
+    reply = result
+      ? `Done. I created a Learn result connected to ${selected.title}.`
+      : `Could not create a Learn result — the selected object may have been removed.`;
   } else if (lower.includes("strict source") || lower.includes("strict sources")) {
     updateProjectSettings(body.projectId, { sourceStrictness: "strict" });
     reply = "Done. I changed this project's source strictness to strict.";

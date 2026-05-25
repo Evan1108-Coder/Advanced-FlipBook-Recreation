@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Bot, Brain, ChevronDown, MessageCircle, Send, Settings, ShieldCheck } from "lucide-react";
 import type { CanvasObject, ChatMessage, MemoryItem, ProjectBundle, ProjectSettings } from "@/lib/types";
 
@@ -33,6 +33,11 @@ export function ChatBubble({
   const [draft, setDraft] = useState("");
   const [localSending, setLocalSending] = useState(false);
   const sending = isSending || localSending;
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    if (expanded) textareaRef.current?.focus();
+  }, [expanded]);
 
   const resolvedMessages = bundle?.chat ?? messages;
   const resolvedMemory = bundle?.memory ?? memory;
@@ -164,6 +169,7 @@ export function ChatBubble({
 
       <form onSubmit={submit}>
         <textarea
+          ref={textareaRef}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           placeholder="Ask Atlas to explain, create a Learn result, or tighten sources..."
