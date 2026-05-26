@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Bot, Brain, ChevronDown, MessageCircle, Send, Settings, ShieldCheck } from "lucide-react";
 import type { CanvasObject, ChatMessage, MemoryItem, ProjectBundle, ProjectSettings } from "@/lib/types";
 
@@ -34,10 +34,7 @@ export function ChatBubble({
   const [localSending, setLocalSending] = useState(false);
   const sending = isSending || localSending;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    if (expanded) textareaRef.current?.focus();
-  }, [expanded]);
+  const messagesRef = useRef<HTMLDivElement>(null);
 
   const resolvedMessages = bundle?.chat ?? messages;
   const resolvedMemory = bundle?.memory ?? memory;
@@ -48,8 +45,18 @@ export function ChatBubble({
   const pinnedMemory = useMemo(() => (memoryEnabled ? resolvedMemory.filter((item) => item.pinned).slice(0, 3) : []), [memoryEnabled, resolvedMemory]);
   const bubbleSize = resolvedSettings?.chatBubbleSize ?? "medium";
 
-  async function submit(event: FormEvent) {
-    event.preventDefault();
+  useEffect(() => {
+    if (expanded) textareaRef.current?.focus();
+  }, [expanded]);
+
+  useEffect(() => {
+    if (messagesRef.current) {
+      messagesRef.current.scrollTop = messagesRef.current.scrollHeight;
+    }
+  }, [resolvedMessages.length, sending]);
+
+  async function submit(event?: FormEvent) {
+    event?.preventDefault();
     const message = draft.trim();
     if (!message || sending) return;
     setDraft("");
@@ -59,6 +66,17 @@ export function ChatBubble({
     } finally {
       setLocalSending(false);
     }
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      submit();
+    }
+  }
+
+  function handlePanelKeyDown(event: KeyboardEvent<HTMLElement>) {
+    if (event.key === "Escape") setExpanded(false);
   }
 
   if (!expanded) {
@@ -113,7 +131,7 @@ export function ChatBubble({
   }
 
   return (
-    <section className="chat-panel" aria-label="AI chat">
+    <section className="chat-panel" aria-label="AI chat" onKeyDown={handlePanelKeyDown}>
       <header>
         <div className="title-row">
           <Bot size={19} aria-hidden />
@@ -151,7 +169,7 @@ export function ChatBubble({
         </div>
       ) : null}
 
-      <div className="messages" aria-live="polite">
+      <div className="messages" ref={messagesRef} aria-live="polite" aria-relevant="additions">
         {visibleMessages.length ? (
           visibleMessages.map((message) => (
             <article key={message.id} className={message.role === "user" ? "message user" : "message assistant"}>
@@ -165,6 +183,12 @@ export function ChatBubble({
             <span>Ask for a branch, explanation, source check, or tool action.</span>
           </div>
         )}
+        {sending ? (
+          <article className="message assistant typing">
+            <span>Atlas</span>
+            <p><span className="typing-dots"><span /><span /><span /></span></p>
+          </article>
+        ) : null}
       </div>
 
       <form onSubmit={submit}>
@@ -172,8 +196,9 @@ export function ChatBubble({
           ref={textareaRef}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={handleKeyDown}
           placeholder="Ask Atlas to explain, create a Learn result, or tighten sources..."
-          aria-label="Chat message"
+          aria-label="Chat message (Enter to send, Shift+Enter for newline)"
           rows={3}
         />
         <button type="submit" disabled={!draft.trim() || sending} aria-label="Send message">
@@ -351,6 +376,29 @@ export function ChatBubble({
         form button:disabled {
           cursor: not-allowed;
           opacity: 0.42;
+        }
+        .typing-dots {
+          display: inline-flex;
+          gap: 4px;
+          align-items: center;
+          height: 20px;
+        }
+        .typing-dots span {
+          width: 7px;
+          height: 7px;
+          border-radius: 50%;
+          background: #8b7a5e;
+          animation: typingBounce 1.2s ease-in-out infinite;
+        }
+        .typing-dots span:nth-child(2) {
+          animation-delay: 0.2s;
+        }
+        .typing-dots span:nth-child(3) {
+          animation-delay: 0.4s;
+        }
+        @keyframes typingBounce {
+          0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+          30% { transform: translateY(-4px); opacity: 1; }
         }
         @media (max-width: 560px) {
           .chat-panel {

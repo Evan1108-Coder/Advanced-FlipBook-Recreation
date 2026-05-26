@@ -82,7 +82,7 @@ export function HomeHub({
             Settings
             <ChevronDown size={15} aria-hidden />
           </button>
-          <div className="settings-flyout" role="dialog" aria-label="Global settings preview">
+          <div className="settings-flyout" role="tooltip" aria-label="Global settings preview">
             <div>
               <strong>Global defaults</strong>
               <span>Mode, memory, privacy, export, and providers.</span>
@@ -115,8 +115,14 @@ export function HomeHub({
             <textarea
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
+              onKeyDown={(event) => {
+                if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+                  event.preventDefault();
+                  submit();
+                }
+              }}
               placeholder="Explore the economics, engineering, and policy tradeoffs of geothermal energy..."
-              aria-label="Project prompt"
+              aria-label="Project prompt (Cmd+Enter to create)"
             />
             <div className="prompt-actions">
               <button type="button" className="upload-button" onClick={() => fileInputRef.current?.click()}>
@@ -128,6 +134,7 @@ export function HomeHub({
                 type="file"
                 multiple
                 hidden
+                aria-label="Upload source files"
                 onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
               />
               <button type="button" className="create-button" onClick={submit} disabled={(!prompt.trim() && files.length === 0) || isCreating}>
@@ -143,7 +150,7 @@ export function HomeHub({
               <span>{currentMode.detail}</span>
             </div>
             <div className="mode-grid">
-              {featureModes.slice(0, 4).map((item) => (
+              {featureModes.map((item) => (
                 <button key={item.id} type="button" className={item.id === mode ? "chip active" : "chip"} onClick={() => setNextMode(item.id)}>
                   {item.label}
                 </button>

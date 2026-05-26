@@ -189,6 +189,21 @@ button:disabled {
   padding: 10px 14px;
   background: var(--ink);
   color: var(--paper);
+  transition: transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+}
+
+.primary-button:hover:not(:disabled),
+.secondary-button:hover:not(:disabled),
+.danger-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(45, 39, 28, 0.18);
+}
+
+.primary-button:active:not(:disabled),
+.secondary-button:active:not(:disabled),
+.danger-button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: none;
 }
 
 .secondary-button {
@@ -207,6 +222,12 @@ button:disabled {
   background: rgba(255, 250, 240, 0.68);
   color: var(--muted);
   padding: 8px 12px;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.mode-chip:hover {
+  background: rgba(241, 207, 104, 0.3);
+  color: var(--ink);
 }
 
 .mode-chip.active {
@@ -229,6 +250,13 @@ button:disabled {
   color: var(--ink);
   padding: 16px;
   text-align: left;
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+}
+
+.project-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(74, 55, 21, 0.12);
+  border-color: rgba(184, 138, 49, 0.4);
 }
 
 .project-card span,
@@ -308,6 +336,7 @@ button:disabled {
 }
 
 .panel-trigger:hover .panel-menu,
+.panel-trigger:focus-within .panel-menu,
 .panel-menu.open {
   display: grid;
 }
@@ -316,10 +345,8 @@ button:disabled {
   position: absolute;
   inset: 0;
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 110px 160px 180px;
-}
-
-.canvas-viewport {
   scroll-padding: 96px;
 }
 
@@ -364,12 +391,18 @@ button:disabled {
 
 .object-body {
   padding: 12px;
+  max-height: calc(100% - 44px);
+  overflow-y: auto;
 }
 
 .object-body p {
   margin: 0;
   color: var(--muted);
   line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 8;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .ask-object-body {
@@ -401,8 +434,10 @@ button:disabled {
   width: 18px;
   height: 18px;
   border: 0;
+  border-radius: 3px;
   background: rgba(125, 79, 19, 0.5);
   opacity: 0;
+  transition: opacity 140ms ease;
 }
 
 .canvas-object.selected .resize-handle,
@@ -482,6 +517,7 @@ button:disabled {
   border-radius: 10px;
   background: var(--paper);
   box-shadow: var(--shadow);
+  animation: fadeIn 120ms ease-out;
 }
 
 .context-menu button {
@@ -496,6 +532,11 @@ button:disabled {
 
 .context-menu button:hover {
   background: rgba(212, 155, 42, 0.12);
+}
+
+.context-menu-danger:hover {
+  background: rgba(155, 56, 44, 0.1) !important;
+  color: var(--danger);
 }
 
 .toolbar {
@@ -658,7 +699,7 @@ button:disabled {
   position: absolute;
   z-index: 60;
   left: 50%;
-  bottom: 32px;
+  bottom: 80px;
   transform: translateX(-50%);
   border: var(--border);
   border-radius: 999px;
@@ -666,12 +707,50 @@ button:disabled {
   color: var(--paper);
   padding: 12px 16px;
   box-shadow: var(--shadow);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: toastIn 220ms ease-out;
 }
 
 .generation-toast.error {
   background: #fff5ec;
   color: #7c2d12;
   border-color: rgba(180, 83, 9, 0.32);
+}
+
+.toast-dismiss {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0 4px;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.toast-dismiss:hover {
+  opacity: 1;
+}
+
+.loading-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 250, 240, 0.3);
+  border-top-color: var(--paper);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
 .global-settings-modal {
@@ -695,6 +774,12 @@ button:disabled {
   max-width: 520px;
 }
 
+.global-settings-content {
+  margin: 16px 0;
+  display: grid;
+  gap: 12px;
+}
+
 .canvas-empty-state {
   position: absolute;
   left: 40px;
@@ -702,9 +787,26 @@ button:disabled {
   z-index: 4;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 textarea:focus-visible,
 input:focus-visible,
 button:focus-visible {
+  outline: 2px solid rgba(125, 79, 19, 0.8);
+  outline-offset: 2px;
+}
+
+.project-card:focus-visible {
   outline: 2px solid rgba(125, 79, 19, 0.8);
   outline-offset: 2px;
 }
@@ -716,10 +818,23 @@ button:focus-visible {
   transition-duration: 1ms !important;
 }
 
+.motion-normal .canvas-object,
+.motion-normal .right-panel,
+.motion-normal .chat-bubble,
+.motion-normal .generation-toast {
+  transition-duration: 180ms;
+}
+
 .motion-expressive .canvas-object,
 .motion-expressive .right-panel,
-.motion-expressive .chat-bubble {
+.motion-expressive .chat-bubble,
+.motion-expressive .generation-toast {
   transition-duration: 260ms;
+}
+
+.motion-normal .canvas-object:hover,
+.motion-expressive .canvas-object:hover {
+  transform: translateY(-2px);
 }
 
 @keyframes slideIn {
@@ -731,6 +846,19 @@ button:focus-visible {
     transform: translateX(0);
     opacity: 1;
   }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.canvas-object {
+  animation: fadeIn 220ms ease-out;
+}
+
+.global-settings-modal > div {
+  animation: fadeIn 180ms ease-out;
 }
 
 @media (max-width: 820px) {
@@ -772,25 +900,33 @@ button:focus-visible {
     left: 18px;
     grid-auto-flow: column;
     grid-template-columns: none;
-    max-width: calc(100vw - 370px);
+    max-width: calc(100vw - 120px);
     overflow-x: auto;
+    mask-image: linear-gradient(to right, black 85%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, black 85%, transparent 100%);
   }
 
   .right-panel {
-    width: min(100vw, 460px) !important;
+    width: 100vw !important;
+    max-width: 100vw !important;
     grid-template-columns: 1fr;
   }
 
   .panel-tabs {
     display: flex;
     overflow-x: auto;
-    padding: 64px 10px 8px;
+    padding: 14px 10px 8px;
     border-right: 0;
     border-bottom: var(--border);
   }
 
   .panel-content {
     padding: 18px;
+  }
+
+  .project-topbar {
+    left: 10px;
+    right: 10px;
   }
 }
 

@@ -333,12 +333,12 @@ export function SettingsControls({ settings, section = "all", onSettingsChange }
             label="Operator actions"
             onChange={(chatOperatorEnabled) => onSettingsChange({ chatOperatorEnabled })}
           />
-          <ToggleField
-            checked={settings.memoryEnabled}
-            help="Include project memory when chat answers questions or operates the workspace."
-            label="Use project memory"
-            onChange={(memoryEnabled) => onSettingsChange({ memoryEnabled })}
-          />
+          <div style={fieldStyle}>
+            <span style={labelStyle}>Project memory</span>
+            <span style={helpStyle}>
+              Memory is {settings.memoryEnabled ? "enabled" : "disabled"}. Change this in Project Settings.
+            </span>
+          </div>
           <SelectField
             help="Controls how much source grounding chat should demand before answering."
             label="Source use"

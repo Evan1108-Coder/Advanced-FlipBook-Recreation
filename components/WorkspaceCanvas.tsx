@@ -165,7 +165,7 @@ export function WorkspaceCanvas({ bundle, selectedObjectId, onSelect, onExplore,
   }
 
   return (
-    <div className="canvas-viewport" ref={viewportRef} onClick={handleCanvasClick} onContextMenu={handleCanvasContextMenu}>
+    <div className="canvas-viewport" ref={viewportRef} role="region" aria-label="Project canvas" onClick={handleCanvasClick} onContextMenu={handleCanvasContextMenu}>
       <div className="canvas-plane" style={{ width: planeSize.width, height: planeSize.height }}>
         <ConnectorLayer objects={bundle.objects} connections={bundle.connections} settings={bundle.settings} width={planeSize.width} height={planeSize.height} />
 
@@ -184,8 +184,7 @@ export function WorkspaceCanvas({ bundle, selectedObjectId, onSelect, onExplore,
         ))}
         {bundle.objects.length === 0 ? (
           <div className="canvas-empty-state">
-            <h2>No canvas objects yet</h2>
-            <p>Start a new Flipbook or return home to create a project from a prompt or source.</p>
+            <p>No objects yet. Use the toolbar to create your first flipbook level, or type a prompt in the chat.</p>
             <button className="primary-button" onClick={() => onTool("new-flipbook")}>Start Flipbook</button>
           </div>
         ) : null}
@@ -245,7 +244,7 @@ function CanvasObjectBox({
       role="button"
       tabIndex={0}
       aria-label={`${object.title} canvas object`}
-      aria-pressed={selected}
+      aria-selected={selected}
       onClick={(event) => onClick(event, object)}
       onDoubleClick={(event) => onDoubleClick(event, object)}
       onContextMenu={(event) => onContextMenu(event, object)}
@@ -328,22 +327,38 @@ function CanvasContextMenu({
   onTool: (tool: CanvasToolId, objectId?: string | null) => void;
   onDelete: (objectId: string) => void;
 }) {
+  const menuRef = useRef<HTMLDivElement>(null);
   const object = state.kind === "object" ? state.object : selectedObject;
   const tools =
     state.kind === "object"
       ? toolDefinitions.filter((tool) => tool.scope !== "always" && isToolEnabledForObject(tool.scope, state.object.type))
       : toolDefinitions.filter((tool) => tool.scope === "always" && tool.id !== "select" && tool.id !== "pan");
 
+  useEffect(() => {
+    const first = menuRef.current?.querySelector<HTMLButtonElement>("button");
+    first?.focus();
+  }, []);
+
+  function handleKeyDown(event: React.KeyboardEvent) {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      const buttons = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? []);
+      const idx = buttons.indexOf(event.target as HTMLButtonElement);
+      const next = event.key === "ArrowDown" ? (idx + 1) % buttons.length : (idx - 1 + buttons.length) % buttons.length;
+      buttons[next]?.focus();
+    }
+  }
+
   return (
-    <div className={clsx("context-menu", `context-menu-${state.kind}`)} style={{ left: state.x, top: state.y }} onClick={(event) => event.stopPropagation()}>
+    <div ref={menuRef} className={clsx("context-menu", `context-menu-${state.kind}`)} role="menu" style={{ left: state.x, top: state.y }} onClick={(event) => event.stopPropagation()} onKeyDown={handleKeyDown}>
       {tools.map((tool) => (
-        <button key={tool.id} type="button" className="context-menu-item" onClick={() => onTool(tool.id, state.kind === "object" ? state.object.id : object?.id ?? null)}>
+        <button key={tool.id} type="button" role="menuitem" className="context-menu-item" onClick={() => onTool(tool.id, state.kind === "object" ? state.object.id : object?.id ?? null)}>
           {tool.label}
         </button>
       ))}
 
       {state.kind === "object" ? (
-        <button type="button" className="context-menu-item danger-button context-menu-danger" onClick={() => onDelete(state.object.id)}>
+        <button type="button" role="menuitem" className="context-menu-item danger-button context-menu-danger" onClick={() => onDelete(state.object.id)}>
           <Trash2 size={14} aria-hidden />
           <span>Delete</span>
         </button>
@@ -398,7 +413,7 @@ function getObjectSourceLabel(object: CanvasObject) {
 function getObjectBody(object: CanvasObject) {
   const body = object.payload.body ?? object.payload.summary ?? object.payload.description ?? object.payload.text;
   if (typeof body === "string" && body.trim()) return body;
-  return "Canvas object";
+  return `${object.type.replace("_", " ")} — no content yet`;
 }
 
 function isToolEnabledForObject(scope: (typeof toolDefinitions)[number]["scope"], objectType: CanvasObjectType) {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { SettingsControls } from "@/components/SettingsControls";
 import { panelSections } from "@/lib/defaults";
 import type { CanvasObject, PanelSection, ProjectBundle, ProjectSettings } from "@/lib/types";
@@ -18,6 +18,7 @@ export type RightPanelProps = {
   onClose?: () => void;
   onSettingsChange: (partial: Partial<ProjectSettings>) => void;
   onWidthChange?: (width: number) => void;
+  onRefresh?: () => void;
 };
 
 const clamp = (value: number, min: number, max: number) => Math.min(Math.max(value, min), max);
@@ -126,10 +127,76 @@ function SectionTitle({ title, detail }: { title: string; detail?: string }) {
   );
 }
 
-function SourcesSection({ bundle }: { bundle: ProjectBundle }) {
+function SourcesSection({ bundle, onRefresh }: { bundle: ProjectBundle; onRefresh?: () => void }) {
+  const [showAdd, setShowAdd] = useState(false);
+  const [newTitle, setNewTitle] = useState("");
+  const [newUrl, setNewUrl] = useState("");
+  const [newExcerpt, setNewExcerpt] = useState("");
+
+  async function addSource() {
+    if (!newTitle.trim()) return;
+    try {
+      const res = await fetch(`/api/projects/${bundle.project.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "add-source", source: { title: newTitle.trim(), url: newUrl.trim(), excerpt: newExcerpt.trim() || "Manually added source." } })
+      });
+      if (res.ok) {
+        setNewTitle("");
+        setNewUrl("");
+        setNewExcerpt("");
+        setShowAdd(false);
+        onRefresh?.();
+      }
+    } catch {}
+  }
+
   return (
     <div style={{ display: "grid", gap: 12 }}>
       <SectionTitle detail={`${bundle.sources.length} source${bundle.sources.length === 1 ? "" : "s"} attached`} title="Sources" />
+      <button
+        type="button"
+        onClick={() => setShowAdd(!showAdd)}
+        style={{ border: "1px dashed #d8cdbc", borderRadius: 8, background: "transparent", color: "#3b342d", padding: "8px 10px", cursor: "pointer", fontSize: 12, fontWeight: 700 }}
+      >
+        {showAdd ? "Cancel" : "+ Add source"}
+      </button>
+      {showAdd ? (
+        <div style={{ ...cardStyle, gap: 10 }}>
+          <input
+            type="text"
+            placeholder="Source title"
+            aria-label="Source title"
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            style={{ border: "1px solid #e1d7c9", borderRadius: 6, padding: "7px 9px", font: "inherit", fontSize: 13 }}
+          />
+          <input
+            type="url"
+            placeholder="URL (optional)"
+            aria-label="Source URL"
+            value={newUrl}
+            onChange={(e) => setNewUrl(e.target.value)}
+            style={{ border: "1px solid #e1d7c9", borderRadius: 6, padding: "7px 9px", font: "inherit", fontSize: 13 }}
+          />
+          <textarea
+            placeholder="Excerpt or description"
+            aria-label="Source excerpt or description"
+            value={newExcerpt}
+            onChange={(e) => setNewExcerpt(e.target.value)}
+            rows={3}
+            style={{ border: "1px solid #e1d7c9", borderRadius: 6, padding: "7px 9px", font: "inherit", fontSize: 13, resize: "vertical" }}
+          />
+          <button
+            type="button"
+            disabled={!newTitle.trim()}
+            onClick={addSource}
+            style={{ border: 0, borderRadius: 6, background: "#2f2923", color: "#fffaf0", padding: "8px 10px", cursor: "pointer", fontSize: 12, fontWeight: 700 }}
+          >
+            Add
+          </button>
+        </div>
+      ) : null}
       {bundle.sources.length ? (
         <ul style={listStyle}>
           {bundle.sources.map((source) => (
@@ -148,7 +215,7 @@ function SourcesSection({ bundle }: { bundle: ProjectBundle }) {
           ))}
         </ul>
       ) : (
-        <EmptyState>No sources have been added to this project yet.</EmptyState>
+        <EmptyState>No sources have been added to this project yet. Click "+ Add source" above to attach one.</EmptyState>
       )}
     </div>
   );
@@ -293,7 +360,32 @@ function VersionsSection({ object }: { object?: CanvasObject }) {
 }
 
 function ExportSection({ bundle, object }: { bundle: ProjectBundle; object?: CanvasObject }) {
+  const [copied, setCopied] = useState(false);
   const markdown = `# ${object?.title ?? bundle.project.name}\n\n${object?.payload.transcript ?? bundle.project.description}\n\nSources: ${bundle.sources.length}`;
+
+  function handleCopy() {
+    const fallback = () => {
+      const ta = document.createElement("textarea");
+      ta.value = markdown;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    };
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(markdown).then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+      }).catch(fallback);
+    } else {
+      fallback();
+    }
+  }
+
   return (
     <div style={{ display: "grid", gap: 12 }}>
       <SectionTitle detail="Prepare project materials for handoff." title="Export" />
@@ -305,8 +397,8 @@ function ExportSection({ bundle, object }: { bundle: ProjectBundle; object?: Can
         <span style={mutedStyle}>Sources: {bundle.sources.length}</span>
       </div>
       <textarea readOnly value={markdown} style={{ minHeight: 160, border: "1px solid #e1d7c9", borderRadius: 8, padding: 10, resize: "vertical" }} />
-      <button style={{ border: "1px solid #d8cdbc", borderRadius: 8, background: "#2f2923", color: "#fffaf0", padding: "8px 10px" }} onClick={() => { navigator.clipboard?.writeText(markdown).catch(() => {}); }}>
-        Copy Markdown Export
+      <button style={{ border: "1px solid #d8cdbc", borderRadius: 8, background: "#2f2923", color: "#fffaf0", padding: "8px 10px" }} onClick={handleCopy}>
+        {copied ? "Copied!" : "Copy Markdown Export"}
       </button>
     </div>
   );
@@ -365,7 +457,8 @@ export function RightPanel({
   onSectionChange,
   onClose,
   onSettingsChange,
-  onWidthChange
+  onWidthChange,
+  onRefresh
 }: RightPanelProps) {
   const [internalSection, setInternalSection] = useState<PanelSection>(activeSection ?? section ?? panelSections[0]);
   const currentSection = activeSection ?? section ?? internalSection;
@@ -380,6 +473,21 @@ export function RightPanel({
     setInternalSection(section);
     onSectionChange?.(section);
   };
+
+  const cleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    return () => { cleanupRef.current?.(); };
+  }, []);
+
+  useEffect(() => {
+    if (!onClose) return;
+    function handleKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose!();
+    }
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [onClose]);
 
   const startResize = (event: ReactPointerEvent<HTMLButtonElement>) => {
     if (!onWidthChange) return;
@@ -396,17 +504,20 @@ export function RightPanel({
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", stop);
       window.removeEventListener("pointercancel", stop);
+      cleanupRef.current = null;
     };
 
+    cleanupRef.current?.();
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", stop, { once: true });
     window.addEventListener("pointercancel", stop, { once: true });
+    cleanupRef.current = stop;
   };
 
   const content = (() => {
     switch (currentSection) {
       case "Sources":
-        return <SourcesSection bundle={bundle} />;
+        return <SourcesSection bundle={bundle} onRefresh={onRefresh} />;
       case "Project Settings":
         return <SettingsControls onSettingsChange={onSettingsChange} section="project" settings={bundle.settings} />;
       case "Chat Settings":
@@ -493,12 +604,13 @@ export function RightPanel({
             Close
           </button>
         ) : null}
-        <nav aria-label="Right panel sections" style={sectionTabsStyle}>
+        <nav aria-label="Right panel sections" role="tablist" style={sectionTabsStyle}>
           {panelSections.map((section) => {
             const isActive = section === currentSection;
             return (
               <button
-                aria-pressed={isActive}
+                role="tab"
+                aria-selected={isActive}
                 key={section}
                 onClick={() => selectSection(section)}
                 style={{

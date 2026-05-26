@@ -431,16 +431,18 @@ export function addConnection(projectId: string, fromId: string, toId: string, l
   db.prepare("INSERT INTO connections VALUES (?, ?, ?, ?, ?, ?)").run(makeId("connection"), projectId, fromId, toId, label ?? null, nowIso());
 }
 
-export function addSource(projectId: string, input: { title: string; excerpt: string; quality: Source["quality"]; url?: string }) {
+export function addSource(projectId: string, input: { title: string; excerpt: string; quality?: Source["quality"]; url?: string }) {
   db.prepare("INSERT INTO sources VALUES (?, ?, ?, ?, ?, ?, ?)").run(
     makeId("source"),
     projectId,
     input.title,
     safeSourceUrl(input.url) ?? null,
     input.excerpt,
-    input.quality,
+    input.quality ?? "balanced",
     nowIso()
   );
+  touchProject(projectId);
+  return getProjectBundle(projectId);
 }
 
 export function addMemory(projectId: string, kind: MemoryItem["kind"], text: string, pinned = false) {
@@ -638,12 +640,12 @@ export function placeholderImage(title: string, mode: string) {
 }
 
 function escapeSvg(value: string) {
-  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+  return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
 }
 
 function compactTitle(value: string) {
-  const clean = value.replace(/\s+/g, " ").trim();
-  return clean.length > 28 ? `${clean.slice(0, 27)}...` : clean;
+  const clean = value.replace(/[\x00-\x1f\x7f]/g, "").replace(/\s+/g, " ").trim();
+  return clean.length > 28 ? `${clean.slice(0, 27)}\u2026` : clean;
 }
 
 function safeParseObject(value: string, fallback: Record<string, unknown>) {

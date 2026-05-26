@@ -116,7 +116,10 @@ async function resolveImage(prompt: string, title: string, settings: ProjectSett
 }
 
 function inferTopic(parentTitle: string, x: number, y: number) {
-  const horizontal = x < 0.34 ? "foundations" : x > 0.66 ? "applications" : "mechanism";
-  const vertical = y < 0.34 ? "overview" : y > 0.66 ? "examples" : "details";
-  return `${parentTitle}: ${horizontal} ${vertical}`;
+  const horizontalLabels = x < 0.34 ? ["Origins", "Foundations", "Context"] : x > 0.66 ? ["Applications", "Impact", "Future"] : ["Core Process", "How It Works", "Key Mechanism"];
+  const verticalLabels = y < 0.34 ? ["Big Picture", "Overview", "Introduction"] : y > 0.66 ? ["Case Studies", "Examples", "Real-World"] : ["Deep Dive", "Analysis", "Details"];
+  const hLabel = horizontalLabels[Math.floor(x * 2.99) % 3];
+  const vLabel = verticalLabels[Math.floor(y * 2.99) % 3];
+  const baseTitle = parentTitle.length > 40 ? parentTitle.slice(0, 40).trim() : parentTitle;
+  return `${baseTitle} — ${hLabel} & ${vLabel}`;
 }

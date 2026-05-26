@@ -63,7 +63,7 @@ async function getLLMReply(
   ];
 
   if (recentChat) {
-    const recentMessages = bundle.chat.slice(-6);
+    const recentMessages = bundle.chat.slice(-12);
     for (const msg of recentMessages) {
       if (msg.role === "user" || msg.role === "assistant") {
         messages.push({ role: msg.role, content: msg.content });
@@ -93,11 +93,13 @@ function detectAction(
   operatorEnabled: boolean
 ): { type: "learn" | "strict" | "none"; } {
   if (!operatorEnabled) return { type: "none" };
-  const lower = userMessage.toLowerCase();
-  if (lower.includes("learn") && (lower.includes("create") || lower.includes("make") || lower.includes("about"))) {
-    return { type: "learn" };
+  const lower = userMessage.toLowerCase().trim();
+  if (/^(create|make|generate)\s+(a\s+)?learn\b/i.test(lower) || /\blearn\s+(about|from|result)\b/i.test(lower)) {
+    if (!lower.includes("how to") && !lower.includes("undo") && !lower.includes("stop")) {
+      return { type: "learn" };
+    }
   }
-  if (lower.includes("strict source") || lower.includes("strict sources")) {
+  if (/^set\s+source.*strict/i.test(lower) || /^(enable|turn on)\s+strict\s+source/i.test(lower)) {
     return { type: "strict" };
   }
   return { type: "none" };
