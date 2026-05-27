@@ -76,7 +76,7 @@ function SelectField<T extends string>({
   return (
     <label style={fieldStyle}>
       <span style={labelStyle}>{label}</span>
-      <select style={controlStyle} value={value} onChange={(event) => onChange(event.target.value as T)}>
+      <select aria-label={label} style={controlStyle} value={value} onChange={(event) => onChange(event.target.value as T)}>
         {options.map((option) => (
           <option key={option.value} value={option.value}>
             {option.label}
@@ -104,6 +104,7 @@ function ToggleField({
       <span style={toggleLabelStyle}>
         <span style={labelStyle}>{label}</span>
         <input
+          aria-label={label}
           checked={checked}
           onChange={(event) => onChange(event.target.checked)}
           style={{ accentColor: "#3f6f5d", height: 18, width: 18 }}
@@ -139,6 +140,7 @@ function NumberField({
         <span style={helpStyle}>{value}px</span>
       </span>
       <input
+        aria-label={label}
         max={max}
         min={min}
         onChange={(event) => onChange(Number(event.target.value))}
@@ -159,7 +161,10 @@ function ModelSelectors({ settings, onSettingsChange }: { settings: ProjectSetti
   const [models, setModels] = useState<ModelsResponse | null>(null);
 
   useEffect(() => {
-    fetch("/api/models").then((r) => r.json()).then(setModels).catch(() => {});
+    fetch("/api/models")
+      .then((r) => r.json())
+      .then(setModels)
+      .catch((error) => console.warn("Failed to load available AI models.", error));
   }, []);
 
   if (!models) return null;
@@ -355,4 +360,3 @@ export function SettingsControls({ settings, section = "all", onSettingsChange }
     </div>
   );
 }
-

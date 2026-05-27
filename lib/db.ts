@@ -278,6 +278,7 @@ export function createProject(input: {
   mode: Mode;
   prompt: string;
   sources?: Array<{ title: string; excerpt: string; url?: string }>;
+  settings?: Partial<ProjectSettings>;
 }): ProjectBundle {
   const id = makeId("project");
   const rootId = makeId("level");
@@ -294,7 +295,8 @@ export function createProject(input: {
       now,
       now
     );
-    db.prepare("INSERT INTO project_settings VALUES (?, ?, ?)").run(id, JSON.stringify(defaultProjectSettings), now);
+    const projectSettings = mergeSettings({ ...defaultProjectSettings, ...input.settings });
+    db.prepare("INSERT INTO project_settings VALUES (?, ?, ?)").run(id, JSON.stringify(projectSettings), now);
     insertObject({
       id: rootId,
       projectId: id,
@@ -438,7 +440,7 @@ export function addSource(projectId: string, input: { title: string; excerpt: st
     input.title,
     safeSourceUrl(input.url) ?? null,
     input.excerpt,
-    input.quality ?? "balanced",
+    input.quality ?? "ok",
     nowIso()
   );
   touchProject(projectId);
@@ -644,7 +646,14 @@ function escapeSvg(value: string) {
 }
 
 function compactTitle(value: string) {
-  const clean = value.replace(/[\x00-\x1f\x7f]/g, "").replace(/\s+/g, " ").trim();
+  const clean = Array.from(value)
+    .filter((char) => {
+      const code = char.charCodeAt(0);
+      return code > 31 && code !== 127;
+    })
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim();
   return clean.length > 28 ? `${clean.slice(0, 27)}\u2026` : clean;
 }
 

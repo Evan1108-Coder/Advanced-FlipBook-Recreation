@@ -132,23 +132,50 @@ function SourcesSection({ bundle, onRefresh }: { bundle: ProjectBundle; onRefres
   const [newTitle, setNewTitle] = useState("");
   const [newUrl, setNewUrl] = useState("");
   const [newExcerpt, setNewExcerpt] = useState("");
+  const [sourceStatus, setSourceStatus] = useState<{ kind: "success" | "error"; text: string } | null>(null);
+  const [isAddingSource, setIsAddingSource] = useState(false);
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const urlInputRef = useRef<HTMLInputElement>(null);
+  const excerptInputRef = useRef<HTMLTextAreaElement>(null);
 
   async function addSource() {
-    if (!newTitle.trim()) return;
+    const title = (titleInputRef.current?.value ?? newTitle).trim();
+    const trimmedUrl = (urlInputRef.current?.value ?? newUrl).trim();
+    const excerpt = (excerptInputRef.current?.value ?? newExcerpt).trim();
+    if (!title) return;
+    if (trimmedUrl && !/^https?:\/\//i.test(trimmedUrl)) {
+      setSourceStatus({ kind: "error", text: "Source URL must start with http:// or https://." });
+      return;
+    }
+    setIsAddingSource(true);
+    setSourceStatus(null);
     try {
       const res = await fetch(`/api/projects/${bundle.project.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ type: "add-source", source: { title: newTitle.trim(), url: newUrl.trim(), excerpt: newExcerpt.trim() || "Manually added source." } })
+        body: JSON.stringify({ type: "add-source", source: { title, url: trimmedUrl, excerpt: excerpt || "Manually added source." } })
       });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setSourceStatus({ kind: "error", text: data.error ?? "Source could not be added." });
+        return;
+      }
       if (res.ok) {
         setNewTitle("");
         setNewUrl("");
         setNewExcerpt("");
+        if (titleInputRef.current) titleInputRef.current.value = "";
+        if (urlInputRef.current) urlInputRef.current.value = "";
+        if (excerptInputRef.current) excerptInputRef.current.value = "";
         setShowAdd(false);
+        setSourceStatus({ kind: "success", text: "Source added." });
         onRefresh?.();
       }
-    } catch {}
+    } catch {
+      setSourceStatus({ kind: "error", text: "Source could not be added. Check your connection and try again." });
+    } finally {
+      setIsAddingSource(false);
+    }
   }
 
   return (
@@ -164,37 +191,48 @@ function SourcesSection({ bundle, onRefresh }: { bundle: ProjectBundle; onRefres
       {showAdd ? (
         <div style={{ ...cardStyle, gap: 10 }}>
           <input
+            ref={titleInputRef}
             type="text"
             placeholder="Source title"
             aria-label="Source title"
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
+            onInput={(e) => setNewTitle(e.currentTarget.value)}
             style={{ border: "1px solid #e1d7c9", borderRadius: 6, padding: "7px 9px", font: "inherit", fontSize: 13 }}
           />
           <input
+            ref={urlInputRef}
             type="url"
             placeholder="URL (optional)"
             aria-label="Source URL"
             value={newUrl}
             onChange={(e) => setNewUrl(e.target.value)}
+            onInput={(e) => setNewUrl(e.currentTarget.value)}
             style={{ border: "1px solid #e1d7c9", borderRadius: 6, padding: "7px 9px", font: "inherit", fontSize: 13 }}
           />
           <textarea
+            ref={excerptInputRef}
             placeholder="Excerpt or description"
             aria-label="Source excerpt or description"
             value={newExcerpt}
             onChange={(e) => setNewExcerpt(e.target.value)}
+            onInput={(e) => setNewExcerpt(e.currentTarget.value)}
             rows={3}
             style={{ border: "1px solid #e1d7c9", borderRadius: 6, padding: "7px 9px", font: "inherit", fontSize: 13, resize: "vertical" }}
           />
           <button
             type="button"
-            disabled={!newTitle.trim()}
+            disabled={isAddingSource}
             onClick={addSource}
             style={{ border: 0, borderRadius: 6, background: "#2f2923", color: "#fffaf0", padding: "8px 10px", cursor: "pointer", fontSize: 12, fontWeight: 700 }}
           >
-            Add
+            {isAddingSource ? "Adding..." : "Add"}
           </button>
+        </div>
+      ) : null}
+      {sourceStatus ? (
+        <div role={sourceStatus.kind === "error" ? "alert" : "status"} style={{ ...mutedStyle, color: sourceStatus.kind === "error" ? "#9b382c" : "#3f6f5d" }}>
+          {sourceStatus.text}
         </div>
       ) : null}
       {bundle.sources.length ? (

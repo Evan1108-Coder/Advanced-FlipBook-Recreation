@@ -774,6 +774,12 @@ button:disabled {
   max-width: 520px;
 }
 
+.global-settings-modal > div {
+  max-height: min(780px, calc(100vh - 36px));
+  overflow: auto;
+  width: min(520px, 100%);
+}
+
 .global-settings-content {
   margin: 16px 0;
   display: grid;

@@ -57,9 +57,10 @@ export function ChatBubble({
 
   async function submit(event?: FormEvent) {
     event?.preventDefault();
-    const message = draft.trim();
+    const message = (textareaRef.current?.value ?? draft).trim();
     if (!message || sending) return;
     setDraft("");
+    if (textareaRef.current) textareaRef.current.value = "";
     setLocalSending(true);
     try {
       await (onSendMessage ?? onSend)?.(message);
@@ -196,12 +197,13 @@ export function ChatBubble({
           ref={textareaRef}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
+          onInput={(event) => setDraft(event.currentTarget.value)}
           onKeyDown={handleKeyDown}
           placeholder="Ask Atlas to explain, create a Learn result, or tighten sources..."
           aria-label="Chat message (Enter to send, Shift+Enter for newline)"
           rows={3}
         />
-        <button type="submit" disabled={!draft.trim() || sending} aria-label="Send message">
+        <button type="submit" disabled={sending} aria-label="Send message">
           <Send size={17} aria-hidden />
         </button>
       </form>

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { addSource, deleteObject, getProjectBundle, updateObjectFrame, updateProjectSettings } from "@/lib/db";
 import { assertLocalRequest, readJsonBody } from "@/lib/api";
-import { cleanFrame, cleanSettings } from "@/lib/validation";
+import { cleanFrame, cleanSettings, safeSourceUrl } from "@/lib/validation";
 
 type Params = Promise<{ projectId: string }>;
 
@@ -39,9 +39,13 @@ export async function PATCH(request: Request, context: { params: Params }) {
     if (!source || typeof source.title !== "string" || !source.title.trim()) {
       return NextResponse.json({ error: "Missing source title" }, { status: 400 });
     }
+    const url = typeof source.url === "string" ? source.url.trim() : "";
+    if (url && !safeSourceUrl(url)) {
+      return NextResponse.json({ error: "Source URL must start with http:// or https://." }, { status: 400 });
+    }
     const bundle = addSource(projectId, {
       title: source.title.trim(),
-      url: typeof source.url === "string" ? source.url.trim() : "",
+      url,
       excerpt: typeof source.excerpt === "string" ? source.excerpt.trim() : "Manually added source."
     });
     if (!bundle) return NextResponse.json({ error: "Project not found" }, { status: 404 });

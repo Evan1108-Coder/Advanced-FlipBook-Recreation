@@ -6,7 +6,9 @@ import { FloatingToolbar } from "@/components/FloatingToolbar";
 import { HomeHub } from "@/components/HomeHub";
 import { RightPanel } from "@/components/RightPanel";
 import { WorkspaceCanvas } from "@/components/WorkspaceCanvas";
-import { panelSections } from "@/lib/defaults";
+import { SettingsControls } from "@/components/SettingsControls";
+import { defaultProjectSettings, panelSections } from "@/lib/defaults";
+import { cleanSettings } from "@/lib/validation";
 import type { CanvasObject, Mode, PanelSection, Project, ProjectBundle, ProjectSettings } from "@/lib/types";
 
 export default function AppPage() {
@@ -20,8 +22,10 @@ export default function AppPage() {
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [isChatSending, setIsChatSending] = useState(false);
   const [isProjectLoading, setIsProjectLoading] = useState(false);
+  const [globalDefaults, setGlobalDefaults] = useState<ProjectSettings>(defaultProjectSettings);
   const frameTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
   const settingsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSettings = useRef<Partial<ProjectSettings>>({});
   const selectedObject = useMemo(
     () => bundle?.objects.find((object) => object.id === selectedObjectId) ?? null,
     [bundle, selectedObjectId]
@@ -29,6 +33,15 @@ export default function AppPage() {
 
   useEffect(() => {
     refreshProjects();
+  }, []);
+
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem("advanced-flipbook-global-defaults");
+      if (stored) setGlobalDefaults({ ...defaultProjectSettings, ...cleanSettings(JSON.parse(stored)) });
+    } catch (error) {
+      console.warn("Failed to load global defaults.", error);
+    }
   }, []);
 
   async function refreshProjects() {
@@ -47,7 +60,9 @@ export default function AppPage() {
       const response = await fetch(`/api/projects/${bundle.project.id}`, { cache: "no-store" });
       const data = await response.json();
       if (response.ok && data.project) setBundle(data);
-    } catch {}
+    } catch {
+      setGenerationError("Failed to refresh project data.");
+    }
   }
 
   async function openProject(projectId: string) {
@@ -78,7 +93,7 @@ export default function AppPage() {
       const response = await fetch("/api/projects", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, mode, sources })
+        body: JSON.stringify({ prompt, mode, sources, settings: globalDefaults })
       });
       const data = await response.json();
       if (!response.ok || !data.project) {
@@ -207,23 +222,39 @@ export default function AppPage() {
   const updateSettings = useCallback((settings: Partial<ProjectSettings>) => {
     if (!bundle) return;
     setBundle((current) => current ? { ...current, settings: { ...current.settings, ...settings } } : current);
+    pendingSettings.current = { ...pendingSettings.current, ...settings };
     if (settingsTimer.current) clearTimeout(settingsTimer.current);
     settingsTimer.current = setTimeout(async () => {
+      const settingsToSave = pendingSettings.current;
+      pendingSettings.current = {};
       try {
         const response = await fetch(`/api/projects/${bundle.project.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ type: "settings", settings })
+          body: JSON.stringify({ type: "settings", settings: settingsToSave })
         });
         const data = await response.json();
         if (response.ok && data.settings) {
           setBundle((current) => current ? { ...current, settings: data.settings } : current);
         }
       } catch {
-        // Settings will remain at optimistic value
+        setGenerationError("Settings were applied locally but could not be saved.");
       }
     }, 300);
   }, [bundle]);
+
+  function updateGlobalDefaults(settings: Partial<ProjectSettings>) {
+    setGlobalDefaults((current) => {
+      const next = { ...current, ...settings };
+      try {
+        window.localStorage.setItem("advanced-flipbook-global-defaults", JSON.stringify(next));
+      } catch (error) {
+        console.warn("Failed to save global defaults.", error);
+        setGenerationError("Global defaults could not be saved in this browser.");
+      }
+      return next;
+    });
+  }
 
   async function deleteObject(objectId: string) {
     if (!bundle) return;
@@ -315,36 +346,14 @@ export default function AppPage() {
   if (!bundle) {
     return (
       <>
-        <HomeHub projects={projects} isCreating={isProjectLoading} onCreateProject={createProject} onOpenProject={openProject} onOpenSettings={() => setGlobalSettingsOpen(true)} />
+        <HomeHub projects={projects} settings={globalDefaults} isCreating={isProjectLoading} onCreateProject={createProject} onOpenProject={openProject} onOpenSettings={() => setGlobalSettingsOpen(true)} />
         {globalSettingsOpen ? (
           <div className="global-settings-modal" role="dialog" aria-modal="true" aria-label="Global settings" onClick={(e) => { if (e.target === e.currentTarget) setGlobalSettingsOpen(false); }}>
             <div>
               <h2>Global Settings</h2>
-              <p>New project defaults are local-first: memory on, balanced sources, warm ivory appearance, and MiniMax fallback enabled when no API key is present.</p>
+              <p>These defaults apply to new local projects. Existing projects keep their own project settings.</p>
               <div className="global-settings-content">
-                <div className="setting-row">
-                  <label>Default memory</label>
-                  <select defaultValue="on">
-                    <option value="on">Enabled</option>
-                    <option value="off">Disabled</option>
-                  </select>
-                </div>
-                <div className="setting-row">
-                  <label>Default source strictness</label>
-                  <select defaultValue="balanced">
-                    <option value="relaxed">Relaxed</option>
-                    <option value="balanced">Balanced</option>
-                    <option value="strict">Strict</option>
-                  </select>
-                </div>
-                <div className="setting-row">
-                  <label>Animation preference</label>
-                  <select defaultValue="normal">
-                    <option value="reduced">Reduced</option>
-                    <option value="normal">Normal</option>
-                    <option value="expressive">Expressive</option>
-                  </select>
-                </div>
+                <SettingsControls settings={globalDefaults} onSettingsChange={updateGlobalDefaults} />
               </div>
               <button className="primary-button" onClick={() => setGlobalSettingsOpen(false)}>Done</button>
             </div>

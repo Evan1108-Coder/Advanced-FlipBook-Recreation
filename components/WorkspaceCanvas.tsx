@@ -228,6 +228,7 @@ function CanvasObjectBox({
   onTool: (tool: CanvasToolId | string, objectId?: string | null) => void;
 }) {
   const [question, setQuestion] = useState("");
+  const questionRef = useRef<HTMLTextAreaElement>(null);
   const objectStyle: CSSProperties = {
     left: object.x,
     top: object.y,
@@ -279,18 +280,23 @@ function CanvasObjectBox({
         <div className="object-body ask-object-body" onClick={(event) => event.stopPropagation()}>
           <p>{body}</p>
           <textarea
+            ref={questionRef}
             value={question}
             onChange={(event) => setQuestion(event.target.value)}
+            onInput={(event) => setQuestion(event.currentTarget.value)}
             placeholder="Ask a question about this branch..."
             aria-label={`Question for ${object.title}`}
           />
           <button
             type="button"
             className="primary-button"
-            disabled={!question.trim()}
+            disabled={false}
             onClick={() => {
-              onTool(`ask:${question.trim()}`, object.parentId ?? object.id);
+              const nextQuestion = (questionRef.current?.value ?? question).trim();
+              if (!nextQuestion) return;
+              onTool(`ask:${nextQuestion}`, object.parentId ?? object.id);
               setQuestion("");
+              if (questionRef.current) questionRef.current.value = "";
             }}
           >
             Ask

@@ -37,6 +37,7 @@ export function HomeHub({
   const [mode, setMode] = useState<Mode>(selectedMode);
   const [prompt, setPrompt] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  const promptInputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currentMode = featureModes.find((item) => item.id === mode) ?? featureModes[0];
@@ -48,7 +49,8 @@ export function HomeHub({
   }
 
   async function submit() {
-    const trimmed = prompt.trim() || (files.length ? `Create a visual brief from ${files.map((file) => file.name).join(", ")}` : "");
+    const currentPrompt = promptInputRef.current?.value ?? prompt;
+    const trimmed = currentPrompt.trim() || (files.length ? `Create a visual brief from ${files.map((file) => file.name).join(", ")}` : "");
     if (!trimmed || isCreating) return;
     const create = onCreateProject as ((prompt: string, mode: Mode, files: File[]) => void | Promise<void>) | undefined;
     await create?.(trimmed, mode, files);
@@ -113,8 +115,10 @@ export function HomeHub({
 
           <div className="prompt-box">
             <textarea
+              ref={promptInputRef}
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
+              onInput={(event) => setPrompt(event.currentTarget.value)}
               onKeyDown={(event) => {
                 if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
                   event.preventDefault();
@@ -137,7 +141,7 @@ export function HomeHub({
                 aria-label="Upload source files"
                 onChange={(event) => setFiles(Array.from(event.target.files ?? []))}
               />
-              <button type="button" className="create-button" onClick={submit} disabled={(!prompt.trim() && files.length === 0) || isCreating}>
+              <button type="button" className="create-button" onClick={submit} disabled={isCreating}>
                 <Play size={17} aria-hidden />
                 {isCreating ? "Creating" : "Create atlas"}
               </button>

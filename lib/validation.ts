@@ -65,6 +65,8 @@ export function cleanSettings(settings: unknown): Partial<ProjectSettings> {
   if (isOneOf(input.animationSpeed, ["reduced", "normal", "expressive"])) next.animationSpeed = input.animationSpeed;
   if (isOneOf(input.minimaxQuality, ["draft", "balanced", "high"])) next.minimaxQuality = input.minimaxQuality;
   if (isOneOf(input.defaultAspectRatio, ["1:1", "4:3", "16:9"])) next.defaultAspectRatio = input.defaultAspectRatio;
+  if (typeof input.textModel === "string" || input.textModel === null) next.textModel = input.textModel;
+  if (typeof input.imageModel === "string" || input.imageModel === null) next.imageModel = input.imageModel;
 
   return next;
 }

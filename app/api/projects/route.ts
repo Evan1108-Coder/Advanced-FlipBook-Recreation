@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { assertLocalRequest, readJsonBody } from "@/lib/api";
 import { createProject, listProjects } from "@/lib/db";
-import { asMode, cleanPrompt, safeSourceUrl } from "@/lib/validation";
+import { asMode, cleanPrompt, cleanSettings, safeSourceUrl } from "@/lib/validation";
 
 export async function GET(request: Request) {
   const blocked = assertLocalRequest(request);
@@ -22,6 +22,7 @@ export async function POST(request: Request) {
     description: `Local visual knowledge workspace generated from: ${prompt}`,
     mode,
     prompt,
+    settings: cleanSettings(body.settings),
     sources: Array.isArray(body.sources)
       ? body.sources
           .slice(0, 12)
