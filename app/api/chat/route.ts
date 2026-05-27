@@ -24,12 +24,14 @@ export async function POST(request: Request) {
 
   if (hasTextModel) {
     const reply = await getLLMReply(bundle, message, selected);
-    const action = detectAction(message, reply, bundle.settings.chatOperatorEnabled);
-    executeAction(action, body.projectId, selected?.id ?? null);
-    addChatMessage(body.projectId, "assistant", reply);
+    const actions = detectActions(message, reply, bundle.settings.chatOperatorEnabled);
+    const actionResults = executeActions(actions, body.projectId, selected?.id ?? null);
+    addChatMessage(body.projectId, "assistant", appendActionResults(reply, actionResults));
   } else {
     const reply = getTemplateReply(bundle, message, selected);
-    addChatMessage(body.projectId, "assistant", reply);
+    const actions = detectActions(message, reply, bundle.settings.chatOperatorEnabled);
+    const actionResults = executeActions(actions, body.projectId, selected?.id ?? null);
+    addChatMessage(body.projectId, "assistant", appendActionResults(reply, actionResults));
   }
 
   return NextResponse.json(getProjectBundle(body.projectId));
@@ -78,43 +80,87 @@ async function getLLMReply(
       model: bundle.settings.textModel ?? undefined,
       maxTokens: 1024,
       temperature: 0.7,
+      timeoutMs: 12_000,
     });
     if (result) return result.content;
   } catch (error) {
     console.warn("LLM chat failed, falling back to template:", error);
+    return `${getTemplateReply(bundle, userMessage, selected)}\n\nProvider note: ${providerFailureMessage(error)}`;
   }
 
   return getTemplateReply(bundle, userMessage, selected);
 }
 
-function detectAction(
+type OperatorAction =
+  | { type: "tool"; tool: "Learn" | "Analysis" | "Compare" | "Timeline" | "Ask"; prompt?: string }
+  | { type: "sourceStrictness"; value: "relaxed" | "balanced" | "strict" }
+  | { type: "memory"; value: boolean }
+  | { type: "none" };
+
+function detectActions(
   userMessage: string,
   _reply: string,
   operatorEnabled: boolean
-): { type: "learn" | "strict" | "none"; } {
-  if (!operatorEnabled) return { type: "none" };
+): OperatorAction[] {
+  if (!operatorEnabled) return [];
   const lower = userMessage.toLowerCase().trim();
-  if (/^(create|make|generate)\s+(a\s+)?learn\b/i.test(lower) || /\blearn\s+(about|from|result)\b/i.test(lower)) {
-    if (!lower.includes("how to") && !lower.includes("undo") && !lower.includes("stop")) {
-      return { type: "learn" };
-    }
+  const actions: OperatorAction[] = [];
+  if (/\b(disable|turn off)\s+(project\s+)?memory\b/i.test(lower)) actions.push({ type: "memory", value: false });
+  if (/\b(enable|turn on)\s+(project\s+)?memory\b/i.test(lower)) actions.push({ type: "memory", value: true });
+  if (/\b(source|sources)\b.*\b(strict|balanced|relaxed)\b/i.test(lower) || /\b(strict|balanced|relaxed)\b.*\b(source|sources)\b/i.test(lower)) {
+    const value = lower.includes("relaxed") ? "relaxed" : lower.includes("balanced") ? "balanced" : "strict";
+    actions.push({ type: "sourceStrictness", value });
   }
-  if (/^set\s+source.*strict/i.test(lower) || /^(enable|turn on)\s+strict\s+source/i.test(lower)) {
-    return { type: "strict" };
+  if (/\b(create|make|generate|add|run|use)\b/i.test(lower) && !/\b(how to|undo|stop|do not|don't)\b/i.test(lower)) {
+    const toolMap: Array<[OperatorAction & { type: "tool" }, RegExp]> = [
+      [{ type: "tool", tool: "Analysis" }, /\banalys(is|e|ze)|analysis\b/i],
+      [{ type: "tool", tool: "Compare" }, /\bcompare|comparison\b/i],
+      [{ type: "tool", tool: "Timeline" }, /\btimeline|sequence|chronology\b/i],
+      [{ type: "tool", tool: "Ask", prompt: userMessage }, /\bask\b/i],
+      [{ type: "tool", tool: "Learn" }, /\blearn\b/i]
+    ];
+    actions.push(...toolMap.filter(([, pattern]) => pattern.test(lower)).map(([action]) => action));
   }
-  return { type: "none" };
+  return actions;
+}
+
+function executeActions(
+  actions: OperatorAction[],
+  projectId: string,
+  selectedObjectId: string | null
+): string[] {
+  return actions.map((action) => executeAction(action, projectId, selectedObjectId)).filter((result): result is string => Boolean(result));
 }
 
 function executeAction(
-  action: { type: string },
+  action: OperatorAction,
   projectId: string,
   selectedObjectId: string | null
-) {
-  if (action.type === "learn" && selectedObjectId) {
-    createToolResult({ projectId, fromId: selectedObjectId, tool: "Learn", prompt: "" });
-  } else if (action.type === "strict") {
-    updateProjectSettings(projectId, { sourceStrictness: "strict" });
+): string | null {
+  if (action.type === "tool") {
+    if (!selectedObjectId) return "No canvas object was selected, so I could not run the tool.";
+    createToolResult({ projectId, fromId: selectedObjectId, tool: action.tool, prompt: action.prompt ?? "" });
+    return `${action.tool} result created on the selected object.`;
   }
+  if (action.type === "sourceStrictness") {
+    updateProjectSettings(projectId, { sourceStrictness: action.value });
+    return `Source strictness set to ${action.value}.`;
+  }
+  if (action.type === "memory") {
+    updateProjectSettings(projectId, { memoryEnabled: action.value });
+    return `Project memory ${action.value ? "enabled" : "disabled"}.`;
+  }
+  return null;
+}
+
+function appendActionResults(reply: string, actionResults: string[]) {
+  return actionResults.length ? `${reply}\n\nAction completed: ${actionResults.join(" ")}` : reply;
+}
+
+function providerFailureMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/timeout|abort|timed out/i.test(message)) return "the selected text provider timed out, so I used the local fallback response.";
+  return "the selected text provider failed, so I used the local fallback response.";
 }
 
 function getTemplateReply(
@@ -124,10 +170,10 @@ function getTemplateReply(
 ): string {
   const lower = message.toLowerCase();
   if (lower.includes("learn") && selected) {
-    return `I created a Learn result connected to "${selected.title}". To get richer AI-powered responses, add a text model API key (OpenAI, Anthropic, Google, Groq, or Moonshot) in your .env.local file.`;
+    return `I can create a Learn result connected to "${selected.title}" and keep the explanation source-aware. To get richer AI-powered responses, keep a text model API key configured in your local .env file.`;
   }
   if (lower.includes("strict source") || lower.includes("strict sources")) {
     return "Done. Source strictness is now set to strict.";
   }
-  return `I can see your project "${bundle.project.name}" with ${bundle.objects.length} objects. To enable AI-powered chat, add a text model API key to your .env.local file. Supported: OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY, GROQ_API_KEY, or MOONSHOT_API_KEY.`;
+  return `I can see your project "${bundle.project.name}" with ${bundle.objects.length} objects. If the selected provider is unavailable, I will still answer with a local fallback and keep operator actions controlled.`;
 }

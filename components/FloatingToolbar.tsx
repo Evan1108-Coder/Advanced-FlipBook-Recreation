@@ -108,7 +108,9 @@ export function FloatingToolbar({
           align-items: center;
           justify-content: center;
           gap: 7px;
+          flex: 0 0 auto;
           min-width: 36px;
+          width: max-content;
           height: 36px;
           padding: 0 10px;
           border: 1px solid transparent;
@@ -146,6 +148,7 @@ export function FloatingToolbar({
           }
           .tool-button {
             flex: 0 0 36px;
+            width: 36px;
             padding: 0;
           }
           .tool-button span {

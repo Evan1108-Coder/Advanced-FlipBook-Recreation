@@ -719,6 +719,16 @@ button:disabled {
   border-color: rgba(180, 83, 9, 0.32);
 }
 
+.generation-toast.success {
+  background: #f2f8ec;
+  color: #2f5135;
+  border-color: rgba(63, 111, 93, 0.32);
+}
+
+.generation-toast.global-toast {
+  position: fixed;
+}
+
 .toast-dismiss {
   border: 0;
   background: transparent;

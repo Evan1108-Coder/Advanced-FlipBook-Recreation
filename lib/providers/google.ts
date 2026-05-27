@@ -27,7 +27,7 @@ export function createGoogleTextProvider(apiKey: string): TextProvider {
               temperature: options.temperature ?? 0.7,
             },
           }),
-          signal: AbortSignal.timeout(30_000),
+          signal: AbortSignal.timeout(options.timeoutMs ?? 12_000),
         }
       );
       if (!response.ok) throw new Error(`Google AI API error: ${response.status}`);

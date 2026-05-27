@@ -89,7 +89,7 @@ function createMinimaxImageProvider(): ImageProvider {
 
 export async function chatCompletion(
   messages: ChatMessage[],
-  options?: { model?: string; maxTokens?: number; temperature?: number }
+  options?: { model?: string; maxTokens?: number; temperature?: number; timeoutMs?: number }
 ): Promise<ChatCompletionResult | null> {
   const resolved = getTextProvider(options?.model);
   if (!resolved) return null;

@@ -26,7 +26,7 @@ export function createAnthropicTextProvider(apiKey: string): TextProvider {
           messages: nonSystemMessages.map((m) => ({ role: m.role, content: m.content })),
           temperature: options.temperature ?? 0.7,
         }),
-        signal: AbortSignal.timeout(30_000),
+        signal: AbortSignal.timeout(options.timeoutMs ?? 12_000),
       });
       if (!response.ok) throw new Error(`Anthropic API error: ${response.status}`);
       const json = await response.json();

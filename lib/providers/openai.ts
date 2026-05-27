@@ -22,7 +22,7 @@ export function createOpenAITextProvider(apiKey: string): TextProvider {
           max_tokens: options.maxTokens ?? 2048,
           temperature: options.temperature ?? 0.7,
         }),
-        signal: AbortSignal.timeout(30_000),
+        signal: AbortSignal.timeout(options.timeoutMs ?? 12_000),
       });
       if (!response.ok) throw new Error(`OpenAI API error: ${response.status}`);
       const json = await response.json();
@@ -45,7 +45,7 @@ export function createOpenAIImageProvider(apiKey: string): ImageProvider {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
         body: JSON.stringify({ model: "dall-e-3", prompt, size, quality, response_format: "b64_json", n: 1 }),
-        signal: AbortSignal.timeout(30_000),
+        signal: AbortSignal.timeout(12_000),
       });
       if (!response.ok) throw new Error(`OpenAI DALL-E error: ${response.status}`);
       const json = await response.json();

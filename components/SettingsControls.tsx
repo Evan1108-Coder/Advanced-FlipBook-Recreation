@@ -155,7 +155,12 @@ function NumberField({
 }
 
 type ModelDef = { id: string; name: string; provider: string; capabilities: string[]; costTier: string };
-type ModelsResponse = { text: ModelDef[]; image: ModelDef[]; vision: ModelDef[] };
+type ModelsResponse = {
+  text: ModelDef[];
+  image: ModelDef[];
+  vision: ModelDef[];
+  diagnostics?: { textConfigured: boolean; imageConfigured: boolean; timeoutMs: number; fallback: string };
+};
 
 function ModelSelectors({ settings, onSettingsChange }: { settings: ProjectSettings; onSettingsChange: (partial: Partial<ProjectSettings>) => void }) {
   const [models, setModels] = useState<ModelsResponse | null>(null);
@@ -177,7 +182,7 @@ function ModelSelectors({ settings, onSettingsChange }: { settings: ProjectSetti
       <div style={{ ...fieldStyle, padding: "8px 0" }}>
         <span style={{ ...labelStyle, color: "#a0522d" }}>No AI models configured</span>
         <span style={helpStyle}>
-          Add API keys to .env.local for AI features. Supported: OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY, GROQ_API_KEY, MINIMAX_API_KEY, MOONSHOT_API_KEY.
+          Add API keys to .env for AI features. Supported: OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY, GROQ_API_KEY, MINIMAX_API_KEY, MOONSHOT_API_KEY.
         </span>
       </div>
     );
@@ -192,6 +197,11 @@ function ModelSelectors({ settings, onSettingsChange }: { settings: ProjectSetti
   return (
     <div style={groupStyle}>
       {warning ? <span style={{ ...helpStyle, color: "#a0522d" }}>{warning}</span> : null}
+      {models.diagnostics ? (
+        <span style={helpStyle}>
+          Provider timeout: {Math.round(models.diagnostics.timeoutMs / 1000)}s. {models.diagnostics.fallback}
+        </span>
+      ) : null}
       {hasText ? (
         <SelectField
           label="Text model"

@@ -18,7 +18,7 @@ export function createMoonshotTextProvider(apiKey: string): TextProvider {
           max_tokens: options.maxTokens ?? 2048,
           temperature: options.temperature ?? 0.7,
         }),
-        signal: AbortSignal.timeout(30_000),
+        signal: AbortSignal.timeout(options.timeoutMs ?? 12_000),
       });
       if (!response.ok) throw new Error(`Moonshot API error: ${response.status}`);
       const json = await response.json();

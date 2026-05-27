@@ -26,7 +26,7 @@ export type ImageGenerationResult = {
 };
 
 export interface TextProvider {
-  chatCompletion(messages: ChatMessage[], options?: { model?: string; maxTokens?: number; temperature?: number }): Promise<ChatCompletionResult>;
+  chatCompletion(messages: ChatMessage[], options?: { model?: string; maxTokens?: number; temperature?: number; timeoutMs?: number }): Promise<ChatCompletionResult>;
 }
 
 export interface ImageProvider {

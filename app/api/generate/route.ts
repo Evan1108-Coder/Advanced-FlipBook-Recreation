@@ -105,7 +105,9 @@ async function resolveImage(prompt: string, title: string, settings: ProjectSett
         quality: settings.minimaxQuality,
       });
       if (result) return result;
-    } catch { /* fall through to minimax */ }
+    } catch (error) {
+      console.warn("Selected image provider failed; falling back to MiniMax/local image path.", error);
+    }
   }
   return minimaxGenerateVisual({
     title,

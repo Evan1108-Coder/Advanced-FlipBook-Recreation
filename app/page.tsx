@@ -20,6 +20,7 @@ export default function AppPage() {
   const [globalSettingsOpen, setGlobalSettingsOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isChatSending, setIsChatSending] = useState(false);
   const [isProjectLoading, setIsProjectLoading] = useState(false);
   const [globalDefaults, setGlobalDefaults] = useState<ProjectSettings>(defaultProjectSettings);
@@ -49,7 +50,8 @@ export default function AppPage() {
       const response = await fetch("/api/projects", { cache: "no-store" });
       const data = await response.json();
       setProjects(data.projects ?? []);
-    } catch {
+    } catch (error) {
+      console.warn("Failed to refresh project list.", error);
       setProjects([]);
     }
   }
@@ -115,6 +117,7 @@ export default function AppPage() {
     if (isGenerating) return;
     setIsGenerating(true);
     setGenerationError(null);
+    setStatusMessage(null);
     try {
       const response = await fetch("/api/generate", {
         method: "POST",
@@ -131,6 +134,8 @@ export default function AppPage() {
       if (!response.ok) throw new Error(data.error ?? "Generation failed");
       setBundle(data);
       setSelectedObjectId(data.objects?.at(-1)?.id ?? object.id);
+      const provider = data.objects?.at(-1)?.payload?.provider;
+      setStatusMessage(provider === "local-fallback" ? "Generated a fallback visual because the image provider did not respond." : "Generated next visual level.");
     } catch (error) {
       setGenerationError(error instanceof Error ? error.message : "Generation failed. Please try again.");
     } finally {
@@ -168,6 +173,7 @@ export default function AppPage() {
         if (data.project) {
           setBundle(data);
           setSelectedObjectId(data.objects?.at(-1)?.id ?? selectedObjectId);
+          setStatusMessage("Started a new Flipbook.");
         }
       } catch (error) {
         setGenerationError(error instanceof Error ? error.message : "New Flipbook failed. Please try again.");
@@ -195,6 +201,7 @@ export default function AppPage() {
       if (!data.project) return;
       setBundle(data);
       setSelectedObjectId(data.objects?.at(-1)?.id ?? objectId);
+      setStatusMessage(`${toolName(toolId)} result added.`);
     } catch (error) {
       setGenerationError(error instanceof Error ? error.message : "Tool failed. Please try again.");
     } finally {
@@ -215,7 +222,7 @@ export default function AppPage() {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ type: "frame", objectId, frame })
-      });
+      }).catch(() => setGenerationError("Canvas position changed locally but could not be saved."));
     }, 160);
   }
 
@@ -236,6 +243,9 @@ export default function AppPage() {
         const data = await response.json();
         if (response.ok && data.settings) {
           setBundle((current) => current ? { ...current, settings: data.settings } : current);
+          setStatusMessage("Project settings saved.");
+        } else {
+          setGenerationError("Settings were applied locally but could not be saved.");
         }
       } catch {
         setGenerationError("Settings were applied locally but could not be saved.");
@@ -248,6 +258,7 @@ export default function AppPage() {
       const next = { ...current, ...settings };
       try {
         window.localStorage.setItem("advanced-flipbook-global-defaults", JSON.stringify(next));
+        setStatusMessage("Global defaults saved.");
       } catch (error) {
         console.warn("Failed to save global defaults.", error);
         setGenerationError("Global defaults could not be saved in this browser.");
@@ -314,7 +325,12 @@ export default function AppPage() {
       });
       if (response.ok) {
         const data = await response.json();
-        if (data.project) setBundle(data);
+        if (data.project) {
+          setBundle(data);
+          setStatusMessage("Canvas organized and saved.");
+        }
+      } else {
+        setGenerationError("Failed to save organized layout.");
       }
     } catch {
       setGenerationError("Failed to save organized layout.");
@@ -326,6 +342,12 @@ export default function AppPage() {
     const timer = setTimeout(() => setGenerationError(null), 8000);
     return () => clearTimeout(timer);
   }, [generationError]);
+
+  useEffect(() => {
+    if (!statusMessage) return;
+    const timer = setTimeout(() => setStatusMessage(null), 4500);
+    return () => clearTimeout(timer);
+  }, [statusMessage]);
 
   useEffect(() => {
     if (!globalSettingsOpen) return;
@@ -347,6 +369,8 @@ export default function AppPage() {
     return (
       <>
         <HomeHub projects={projects} settings={globalDefaults} isCreating={isProjectLoading} onCreateProject={createProject} onOpenProject={openProject} onOpenSettings={() => setGlobalSettingsOpen(true)} />
+        {statusMessage ? <div className="generation-toast success global-toast" role="status" aria-live="polite">{statusMessage}<button className="toast-dismiss" onClick={() => setStatusMessage(null)} aria-label="Dismiss">&times;</button></div> : null}
+        {generationError ? <div className="generation-toast error global-toast" role="alert" aria-live="assertive">{generationError}<button className="toast-dismiss" onClick={() => setGenerationError(null)} aria-label="Dismiss">&times;</button></div> : null}
         {globalSettingsOpen ? (
           <div className="global-settings-modal" role="dialog" aria-modal="true" aria-label="Global settings" onClick={(e) => { if (e.target === e.currentTarget) setGlobalSettingsOpen(false); }}>
             <div>
@@ -398,6 +422,7 @@ export default function AppPage() {
 
       {isGenerating ? <div className="generation-toast" role="status" aria-live="polite"><span className="loading-spinner" aria-hidden />Generating next visual level...</div> : null}
       {!isGenerating && generationError ? <div className="generation-toast error" role="alert" aria-live="assertive">{generationError}<button className="toast-dismiss" onClick={() => setGenerationError(null)} aria-label="Dismiss">&times;</button></div> : null}
+      {!isGenerating && !generationError && statusMessage ? <div className="generation-toast success" role="status" aria-live="polite">{statusMessage}<button className="toast-dismiss" onClick={() => setStatusMessage(null)} aria-label="Dismiss">&times;</button></div> : null}
 
       <FloatingToolbar selectedObject={selectedObject} settings={bundle.settings} onTool={runTool} />
 
