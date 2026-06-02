@@ -102,6 +102,8 @@ export function FloatingToolbar({
           top: 50%;
           transform: translateY(-50%);
           flex-direction: column;
+          max-height: calc(100vh - 160px);
+          overflow-y: auto;
         }
         .tool-button {
           display: inline-flex;

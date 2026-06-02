@@ -7,7 +7,7 @@ import type { CanvasObject, Connection, ProjectSettings } from "@/lib/types";
 export type ConnectorLayerProps = {
   objects: CanvasObject[];
   connections: Connection[];
-  settings: Pick<ProjectSettings, "connectorStyle">;
+  settings: Pick<ProjectSettings, "connectorStyle" | "connectorLabels">;
   width?: number;
   height?: number;
 };
@@ -39,7 +39,7 @@ export function ConnectorLayer({ objects, connections, settings, width = fallbac
         return (
           <g key={connection.id} className={clsx("connector", `connector-${settings.connectorStyle}`)}>
             <path className="connector-path" d={path} />
-            {connection.label ? (
+            {settings.connectorLabels !== false && connection.label ? (
               <text className="connector-label" x={(start.x + end.x) / 2} y={(start.y + end.y) / 2 - 8}>
                 {connection.label}
               </text>

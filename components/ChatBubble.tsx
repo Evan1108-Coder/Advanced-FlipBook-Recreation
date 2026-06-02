@@ -29,7 +29,8 @@ export function ChatBubble({
   onSendMessage,
   onOpenSettings
 }: ChatBubbleProps) {
-  const [expanded, setExpanded] = useState(false);
+  const resolvedSettings = bundle?.settings ?? settings;
+  const [expanded, setExpanded] = useState(resolvedSettings?.chatDefaultOpen ?? false);
   const [draft, setDraft] = useState("");
   const [localSending, setLocalSending] = useState(false);
   const sending = isSending || localSending;
@@ -38,9 +39,11 @@ export function ChatBubble({
 
   const resolvedMessages = bundle?.chat ?? messages;
   const resolvedMemory = bundle?.memory ?? memory;
-  const resolvedSettings = bundle?.settings ?? settings;
   const contextTitle = selectedObjectTitle ?? selectedObject?.title;
-  const visibleMessages = useMemo(() => resolvedMessages.filter((message) => message.role !== "system").slice(-8), [resolvedMessages]);
+  const visibleMessages = useMemo(
+    () => resolvedMessages.filter((message) => message.role !== "system").slice(-(resolvedSettings?.chatHistoryLimit ?? 8)),
+    [resolvedMessages, resolvedSettings?.chatHistoryLimit]
+  );
   const memoryEnabled = resolvedSettings?.memoryEnabled !== false;
   const pinnedMemory = useMemo(() => (memoryEnabled ? resolvedMemory.filter((item) => item.pinned).slice(0, 3) : []), [memoryEnabled, resolvedMemory]);
   const bubbleSize = resolvedSettings?.chatBubbleSize ?? "medium";
@@ -48,6 +51,10 @@ export function ChatBubble({
   useEffect(() => {
     if (expanded) textareaRef.current?.focus();
   }, [expanded]);
+
+  useEffect(() => {
+    setExpanded(Boolean(resolvedSettings?.chatDefaultOpen));
+  }, [bundle?.project.id, resolvedSettings?.chatDefaultOpen]);
 
   useEffect(() => {
     if (messagesRef.current) {
@@ -70,7 +77,7 @@ export function ChatBubble({
   }
 
   function handleKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Enter" && !event.shiftKey) {
+    if (resolvedSettings?.chatEnterToSend !== false && event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
       submit();
     }
@@ -151,7 +158,7 @@ export function ChatBubble({
         </div>
       </header>
 
-      <div className="context-strip" aria-label="Chat context">
+      {resolvedSettings?.chatShowContext !== false ? <div className="context-strip" aria-label="Chat context">
         <span>
           <Brain size={15} aria-hidden />
           Memory {memoryEnabled ? "on" : "off"} · {memoryEnabled ? resolvedMemory.length : 0} item{resolvedMemory.length === 1 ? "" : "s"}
@@ -160,7 +167,7 @@ export function ChatBubble({
           <ShieldCheck size={15} aria-hidden />
           Sources {resolvedSettings?.sourceStrictness ?? "balanced"}
         </span>
-      </div>
+      </div> : null}
 
       {pinnedMemory.length ? (
         <div className="memory-preview" aria-label="Pinned memory">

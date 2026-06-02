@@ -42,7 +42,8 @@ async function getLLMReply(
   userMessage: string,
   selected: { id: string; title: string; type: string } | undefined
 ): Promise<string> {
-  const recentChat = bundle.chat.slice(-10).map((m) => `${m.role}: ${m.content}`).join("\n");
+  const historyLimit = bundle.settings.chatHistoryLimit;
+  const recentChat = bundle.chat.slice(-historyLimit).map((m) => `${m.role}: ${m.content}`).join("\n");
   const memoryContext = bundle.memory.slice(0, 5).map((m) => m.text).join("; ");
   const sourcesContext = bundle.sources.slice(0, 5).map((s) => `${s.title}: ${s.excerpt.slice(0, 100)}`).join("\n");
 
@@ -65,7 +66,7 @@ async function getLLMReply(
   ];
 
   if (recentChat) {
-    const recentMessages = bundle.chat.slice(-12);
+    const recentMessages = bundle.chat.slice(-historyLimit);
     for (const msg of recentMessages) {
       if (msg.role === "user" || msg.role === "assistant") {
         messages.push({ role: msg.role, content: msg.content });

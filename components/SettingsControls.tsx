@@ -52,6 +52,16 @@ const rowStyle: CSSProperties = {
   justifyContent: "space-between"
 };
 
+const dividerStyle: CSSProperties = {
+  borderTop: "1px solid #e5d9c8",
+  color: "#6d5f4d",
+  fontSize: 12,
+  fontWeight: 800,
+  letterSpacing: "0.06em",
+  paddingTop: 12,
+  textTransform: "uppercase"
+};
+
 const toggleLabelStyle: CSSProperties = {
   alignItems: "center",
   cursor: "pointer",
@@ -162,7 +172,7 @@ type ModelsResponse = {
   diagnostics?: { textConfigured: boolean; imageConfigured: boolean; timeoutMs: number; fallback: string };
 };
 
-function ModelSelectors({ settings, onSettingsChange }: { settings: ProjectSettings; onSettingsChange: (partial: Partial<ProjectSettings>) => void }) {
+export function ModelSelectors({ settings, onSettingsChange }: { settings: ProjectSettings; onSettingsChange: (partial: Partial<ProjectSettings>) => void }) {
   const [models, setModels] = useState<ModelsResponse | null>(null);
 
   useEffect(() => {
@@ -237,6 +247,7 @@ export function SettingsControls({ settings, section = "all", onSettingsChange }
               Project Settings
             </h3>
           ) : null}
+          <div style={dividerStyle}>Project behavior</div>
           <SelectField
             help="Choose what happens to child objects when an object is deleted."
             label="Delete behavior"
@@ -276,6 +287,42 @@ export function SettingsControls({ settings, section = "all", onSettingsChange }
             ]}
             value={settings.connectorStyle}
           />
+          <div style={dividerStyle}>Canvas</div>
+          <ToggleField
+            checked={settings.connectorLabels}
+            label="Connector labels"
+            onChange={(connectorLabels) => onSettingsChange({ connectorLabels })}
+          />
+          <SelectField
+            label="Canvas grid"
+            onChange={(canvasGrid) => onSettingsChange({ canvasGrid })}
+            options={[
+              { value: "off", label: "Off" },
+              { value: "dots", label: "Dots" },
+              { value: "lines", label: "Lines" }
+            ]}
+            value={settings.canvasGrid}
+          />
+          <SelectField
+            label="Canvas snap"
+            onChange={(canvasSnap) => onSettingsChange({ canvasSnap })}
+            options={[
+              { value: "off", label: "Off" },
+              { value: "fine", label: "Fine" },
+              { value: "coarse", label: "Coarse" }
+            ]}
+            value={settings.canvasSnap}
+          />
+          <SelectField
+            label="Auto-organize spacing"
+            onChange={(canvasAutoOrganizeSpacing) => onSettingsChange({ canvasAutoOrganizeSpacing })}
+            options={[
+              { value: "tight", label: "Tight" },
+              { value: "balanced", label: "Balanced" },
+              { value: "wide", label: "Wide" }
+            ]}
+            value={settings.canvasAutoOrganizeSpacing}
+          />
           <SelectField
             label="Animation speed"
             onChange={(animationSpeed) => onSettingsChange({ animationSpeed })}
@@ -286,6 +333,7 @@ export function SettingsControls({ settings, section = "all", onSettingsChange }
             ]}
             value={settings.animationSpeed}
           />
+          <div style={dividerStyle}>Models and generation</div>
           <ModelSelectors settings={settings} onSettingsChange={onSettingsChange} />
           <SelectField
             label="Image quality"
@@ -308,10 +356,40 @@ export function SettingsControls({ settings, section = "all", onSettingsChange }
             ]}
             value={settings.defaultAspectRatio}
           />
+          <div style={dividerStyle}>Toolbar and sources</div>
           <ToggleField
             checked={settings.toolbarLabels}
             label="Toolbar labels"
             onChange={(toolbarLabels) => onSettingsChange({ toolbarLabels })}
+          />
+          <SelectField
+            label="Toolbar position"
+            onChange={(toolbarPosition) => onSettingsChange({ toolbarPosition })}
+            options={[
+              { value: "bottom", label: "Bottom" },
+              { value: "left", label: "Left" }
+            ]}
+            value={settings.toolbarPosition}
+          />
+          <ToggleField
+            checked={settings.showObjectMeta}
+            label="Object metadata"
+            onChange={(showObjectMeta) => onSettingsChange({ showObjectMeta })}
+          />
+          <ToggleField
+            checked={settings.confirmRegenerate}
+            label="Confirm regenerate"
+            onChange={(confirmRegenerate) => onSettingsChange({ confirmRegenerate })}
+          />
+          <SelectField
+            label="Source URL requirement"
+            onChange={(sourceUrlRequirement) => onSettingsChange({ sourceUrlRequirement })}
+            options={[
+              { value: "optional", label: "Optional" },
+              { value: "warn", label: "Warn" },
+              { value: "required", label: "Required" }
+            ]}
+            value={settings.sourceUrlRequirement}
           />
           <NumberField
             help="The right panel can also be resized by dragging its left edge."
@@ -331,6 +409,7 @@ export function SettingsControls({ settings, section = "all", onSettingsChange }
               Chat Settings
             </h3>
           ) : null}
+          <div style={dividerStyle}>Chat panel</div>
           <SelectField
             help="Adjust the compact chat bubble footprint in the workspace."
             label="Bubble size"
@@ -341,6 +420,21 @@ export function SettingsControls({ settings, section = "all", onSettingsChange }
               { value: "large", label: "Large" }
             ]}
             value={settings.chatBubbleSize}
+          />
+          <ToggleField
+            checked={settings.chatDefaultOpen}
+            label="Open by default"
+            onChange={(chatDefaultOpen) => onSettingsChange({ chatDefaultOpen })}
+          />
+          <ToggleField
+            checked={settings.chatShowContext}
+            label="Show context strip"
+            onChange={(chatShowContext) => onSettingsChange({ chatShowContext })}
+          />
+          <ToggleField
+            checked={settings.chatEnterToSend}
+            label="Enter sends"
+            onChange={(chatEnterToSend) => onSettingsChange({ chatEnterToSend })}
           />
           <ToggleField
             checked={settings.chatOperatorEnabled}

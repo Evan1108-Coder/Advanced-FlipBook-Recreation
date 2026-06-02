@@ -285,6 +285,8 @@ export function createProject(input: {
   const now = nowIso();
   const title = input.name.trim() || input.prompt.trim() || "Untitled Atlas";
   const modeSpec = modeContent(input.mode, title);
+  const projectSettings = mergeSettings({ ...defaultProjectSettings, ...input.settings });
+  const validSources = (input.sources ?? []).filter((source) => projectSettings.sourceUrlRequirement !== "required" || safeSourceUrl(source.url));
 
   const create = db.transaction(() => {
     db.prepare("INSERT INTO projects VALUES (?, ?, ?, ?, ?, ?)").run(
@@ -295,7 +297,6 @@ export function createProject(input: {
       now,
       now
     );
-    const projectSettings = mergeSettings({ ...defaultProjectSettings, ...input.settings });
     db.prepare("INSERT INTO project_settings VALUES (?, ?, ?)").run(id, JSON.stringify(projectSettings), now);
     insertObject({
       id: rootId,
@@ -327,21 +328,21 @@ export function createProject(input: {
       createdAt: now,
       updatedAt: now
     });
-    addMemory(id, "summary", `Project started around ${title}.`, true);
-    if (input.sources?.length) {
-      input.sources.slice(0, 12).forEach((source) =>
+    if (projectSettings.memoryEnabled) addMemory(id, "summary", `Project started around ${title}.`, true);
+    if (validSources.length) {
+      validSources.slice(0, 12).forEach((source) =>
         addSource(id, {
           title: source.title,
           excerpt: source.excerpt,
           url: safeSourceUrl(source.url),
-          quality: "ok"
+          quality: projectSettings.sourceDefaultQuality
         })
       );
     } else {
       addSource(id, {
         title: "Starter source placeholder",
         excerpt: "Add or import sources to make claims and transcripts fully evidence-backed.",
-        quality: "draft"
+        quality: projectSettings.sourceDefaultQuality
       });
     }
   });
@@ -443,6 +444,22 @@ export function addSource(projectId: string, input: { title: string; excerpt: st
     input.quality ?? "ok",
     nowIso()
   );
+  touchProject(projectId);
+  return getProjectBundle(projectId);
+}
+
+export function clearProjectMemory(projectId: string) {
+  const bundle = getProjectBundle(projectId);
+  if (!bundle) return null;
+  db.prepare("DELETE FROM memory_items WHERE project_id = ?").run(projectId);
+  touchProject(projectId);
+  return getProjectBundle(projectId);
+}
+
+export function clearProjectChat(projectId: string) {
+  const bundle = getProjectBundle(projectId);
+  if (!bundle) return null;
+  db.prepare("DELETE FROM chat_messages WHERE project_id = ?").run(projectId);
   touchProject(projectId);
   return getProjectBundle(projectId);
 }
@@ -617,6 +634,23 @@ export function deleteObject(projectId: string, objectId: string, confirmed = fa
   deleteMany();
   touchProject(projectId);
   return getProjectBundle(projectId);
+}
+
+export function deleteProject(projectId: string) {
+  const bundle = getProjectBundle(projectId);
+  if (!bundle) return false;
+  const urls = new Set<unknown>(bundle.objects.map((object) => object.payload.imageUrl));
+  const versions = db.prepare("SELECT snapshot_json FROM versions WHERE project_id = ?").all(projectId) as Array<{ snapshot_json: string }>;
+  versions.forEach((version) => {
+    const snapshot = safeParseObject(version.snapshot_json, {});
+    const payload = snapshot.payload;
+    if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+      urls.add((payload as Record<string, unknown>).imageUrl);
+    }
+  });
+  urls.forEach(removeGeneratedAsset);
+  db.prepare("DELETE FROM projects WHERE id = ?").run(projectId);
+  return true;
 }
 
 export function placeholderImage(title: string, mode: string) {

@@ -76,8 +76,8 @@ export function WorkspaceCanvas({ bundle, selectedObjectId, onSelect, onExplore,
 
       const frame =
         activeDrag.kind === "move"
-          ? getMovedFrame(activeDrag.object, dx, dy)
-          : getResizedFrame(activeDrag.object, activeDrag.corner, dx, dy);
+          ? getMovedFrame(activeDrag.object, dx, dy, bundle.settings.canvasSnap)
+          : getResizedFrame(activeDrag.object, activeDrag.corner, dx, dy, bundle.settings.canvasSnap);
 
       onFrameChange(activeDrag.object.id, frame);
     }
@@ -165,7 +165,7 @@ export function WorkspaceCanvas({ bundle, selectedObjectId, onSelect, onExplore,
   }
 
   return (
-    <div className="canvas-viewport" ref={viewportRef} role="region" aria-label="Project canvas" onClick={handleCanvasClick} onContextMenu={handleCanvasContextMenu}>
+    <div className={clsx("canvas-viewport", `canvas-grid-${bundle.settings.canvasGrid}`, `canvas-scale-${bundle.settings.canvasObjectScale}`)} ref={viewportRef} role="region" aria-label="Project canvas" onClick={handleCanvasClick} onContextMenu={handleCanvasContextMenu}>
       <div className="canvas-plane" style={{ width: planeSize.width, height: planeSize.height }}>
         <ConnectorLayer objects={bundle.objects} connections={bundle.connections} settings={bundle.settings} width={planeSize.width} height={planeSize.height} />
 
@@ -180,6 +180,7 @@ export function WorkspaceCanvas({ bundle, selectedObjectId, onSelect, onExplore,
             onMoveStart={beginMove}
             onResizeStart={beginResize}
             onTool={onTool}
+            settings={bundle.settings}
           />
         ))}
         {bundle.objects.length === 0 ? (
@@ -216,7 +217,8 @@ function CanvasObjectBox({
   onContextMenu,
   onMoveStart,
   onResizeStart,
-  onTool
+  onTool,
+  settings
 }: {
   object: CanvasObject;
   selected: boolean;
@@ -226,6 +228,7 @@ function CanvasObjectBox({
   onMoveStart: (event: ReactPointerEvent, object: CanvasObject) => void;
   onResizeStart: (event: ReactPointerEvent, object: CanvasObject, corner: ResizeCorner) => void;
   onTool: (tool: CanvasToolId | string, objectId?: string | null) => void;
+  settings: ProjectBundle["settings"];
 }) {
   const [question, setQuestion] = useState("");
   const questionRef = useRef<HTMLTextAreaElement>(null);
@@ -259,9 +262,11 @@ function CanvasObjectBox({
       <div className="object-header" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => onMoveStart(event, object)}>
         <div className="object-heading">
           <strong className="object-title">{object.title}</strong>
-          <span className="object-meta">
-            {object.type.replace("_", " ")} · {getObjectSourceLabel(object)}
-          </span>
+          {settings.showObjectMeta ? (
+            <span className="object-meta">
+              {object.type.replace("_", " ")} · {getObjectSourceLabel(object)}
+            </span>
+          ) : null}
         </div>
         <button
           className="secondary-button object-menu-button"
@@ -373,27 +378,32 @@ function CanvasContextMenu({
   );
 }
 
-function getMovedFrame(object: CanvasObject, dx: number, dy: number): WorkspaceCanvasFramePatch {
+function getMovedFrame(object: CanvasObject, dx: number, dy: number, snap: ProjectBundle["settings"]["canvasSnap"]): WorkspaceCanvasFramePatch {
   return {
-    x: Math.max(0, Math.round(object.x + dx)),
-    y: Math.max(0, Math.round(object.y + dy))
+    x: snapValue(Math.max(0, object.x + dx), snap),
+    y: snapValue(Math.max(0, object.y + dy), snap)
   };
 }
 
-function getResizedFrame(object: CanvasObject, corner: ResizeCorner, dx: number, dy: number): WorkspaceCanvasFramePatch {
+function getResizedFrame(object: CanvasObject, corner: ResizeCorner, dx: number, dy: number, snap: ProjectBundle["settings"]["canvasSnap"]): WorkspaceCanvasFramePatch {
   const movingWest = corner === "nw" || corner === "sw";
   const movingNorth = corner === "nw" || corner === "ne";
   const rawWidth = movingWest ? object.width - dx : object.width + dx;
   const rawHeight = movingNorth ? object.height - dy : object.height + dy;
-  const width = Math.max(minObjectSize.width, Math.round(rawWidth));
-  const height = Math.max(minObjectSize.height, Math.round(rawHeight));
+  const width = Math.max(minObjectSize.width, snapValue(rawWidth, snap));
+  const height = Math.max(minObjectSize.height, snapValue(rawHeight, snap));
 
   return {
     width,
     height,
-    x: movingWest ? Math.max(0, Math.round(object.x + object.width - width)) : object.x,
-    y: movingNorth ? Math.max(0, Math.round(object.y + object.height - height)) : object.y
+    x: movingWest ? snapValue(Math.max(0, object.x + object.width - width), snap) : object.x,
+    y: movingNorth ? snapValue(Math.max(0, object.y + object.height - height), snap) : object.y
   };
+}
+
+function snapValue(value: number, snap: ProjectBundle["settings"]["canvasSnap"]) {
+  const step = snap === "coarse" ? 40 : snap === "fine" ? 10 : 1;
+  return Math.round(value / step) * step;
 }
 
 function getPlaneSize(objects: CanvasObject[]) {

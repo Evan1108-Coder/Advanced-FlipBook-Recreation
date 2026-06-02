@@ -143,6 +143,14 @@ function SourcesSection({ bundle, onRefresh }: { bundle: ProjectBundle; onRefres
     const trimmedUrl = (urlInputRef.current?.value ?? newUrl).trim();
     const excerpt = (excerptInputRef.current?.value ?? newExcerpt).trim();
     if (!title) return;
+    if (bundle.settings.sourceUrlRequirement === "required" && !trimmedUrl) {
+      setSourceStatus({ kind: "error", text: "Source URL is required by project settings." });
+      return;
+    }
+    if (bundle.settings.sourceUrlRequirement === "warn" && !trimmedUrl && !window.confirm("This project warns before saving sources without URLs. Save this source anyway?")) {
+      setSourceStatus({ kind: "error", text: "Source was not added because it has no URL." });
+      return;
+    }
     if (trimmedUrl && !/^https?:\/\//i.test(trimmedUrl)) {
       setSourceStatus({ kind: "error", text: "Source URL must start with http:// or https://." });
       return;
@@ -218,7 +226,7 @@ function SourcesSection({ bundle, onRefresh }: { bundle: ProjectBundle; onRefres
             onChange={(e) => setNewExcerpt(e.target.value)}
             onInput={(e) => setNewExcerpt(e.currentTarget.value)}
             rows={3}
-            style={{ border: "1px solid #e1d7c9", borderRadius: 6, padding: "7px 9px", font: "inherit", fontSize: 13, resize: "vertical" }}
+            style={{ border: "1px solid #e1d7c9", borderRadius: 6, boxSizing: "border-box", minWidth: 0, padding: "7px 9px", width: "100%", font: "inherit", fontSize: 13, resize: "vertical" }}
           />
           <button
             type="button"
@@ -241,7 +249,7 @@ function SourcesSection({ bundle, onRefresh }: { bundle: ProjectBundle; onRefres
             <li key={source.id} style={{ ...cardStyle, listStyle: "none" }}>
               <div style={{ alignItems: "center", display: "flex", gap: 8, justifyContent: "space-between" }}>
                 <strong style={{ fontSize: 13 }}>{source.title}</strong>
-                <span style={{ ...mutedStyle, textTransform: "capitalize" }}>{source.quality}</span>
+                {bundle.settings.showSourceQuality ? <span style={{ ...mutedStyle, textTransform: "capitalize" }}>{source.quality}</span> : null}
               </div>
               {source.url ? (
                 <a href={source.url} target="_blank" rel="noopener noreferrer" style={{ color: "#3f6f5d", fontSize: 12, overflowWrap: "anywhere" }}>
@@ -399,12 +407,12 @@ function VersionsSection({ object }: { object?: CanvasObject }) {
 
 function ExportSection({ bundle, object }: { bundle: ProjectBundle; object?: CanvasObject }) {
   const [copied, setCopied] = useState(false);
-  const markdown = `# ${object?.title ?? bundle.project.name}\n\n${object?.payload.transcript ?? bundle.project.description}\n\nSources: ${bundle.sources.length}`;
+  const exportText = buildExport(bundle, object);
 
   function handleCopy() {
     const fallback = () => {
       const ta = document.createElement("textarea");
-      ta.value = markdown;
+      ta.value = exportText;
       ta.style.position = "fixed";
       ta.style.opacity = "0";
       document.body.appendChild(ta);
@@ -415,7 +423,7 @@ function ExportSection({ bundle, object }: { bundle: ProjectBundle; object?: Can
       setTimeout(() => setCopied(false), 2000);
     };
     if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(markdown).then(() => {
+      navigator.clipboard.writeText(exportText).then(() => {
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
       }).catch(fallback);
@@ -434,12 +442,48 @@ function ExportSection({ bundle, object }: { bundle: ProjectBundle; object?: Can
         <span style={mutedStyle}>Objects: {bundle.objects.length}</span>
         <span style={mutedStyle}>Sources: {bundle.sources.length}</span>
       </div>
-      <textarea readOnly value={markdown} style={{ minHeight: 160, border: "1px solid #e1d7c9", borderRadius: 8, padding: 10, resize: "vertical" }} />
+      <textarea readOnly value={exportText} style={{ minHeight: 160, border: "1px solid #e1d7c9", borderRadius: 8, boxSizing: "border-box", minWidth: 0, overflowWrap: "anywhere", padding: 10, resize: "vertical", whiteSpace: "pre-wrap", width: "100%" }} />
       <button style={{ border: "1px solid #d8cdbc", borderRadius: 8, background: "#2f2923", color: "#fffaf0", padding: "8px 10px" }} onClick={handleCopy}>
-        {copied ? "Copied!" : "Copy Markdown Export"}
+        {copied ? "Copied!" : `Copy ${bundle.settings.exportDefaultFormat} export`}
       </button>
     </div>
   );
+}
+
+function buildExport(bundle: ProjectBundle, object?: CanvasObject) {
+  const selected = object ?? bundle.objects[0];
+  const title = selected?.title ?? bundle.project.name;
+  const transcript = selected?.payload.transcript ?? selected?.payload.summary ?? bundle.project.description;
+  const claims = Array.isArray(selected?.payload.claims) ? selected.payload.claims.filter((item): item is string => typeof item === "string") : [];
+  const sources = bundle.sources.map((source) => ({ title: source.title, url: source.url, quality: source.quality, excerpt: source.excerpt }));
+
+  if (bundle.settings.exportDefaultFormat === "json") {
+    return JSON.stringify({
+      project: bundle.project.name,
+      selectedObject: title,
+      transcript,
+      claims: bundle.settings.exportIncludeClaims ? claims : undefined,
+      sources: bundle.settings.exportIncludeSources ? sources : undefined
+    }, null, 2);
+  }
+
+  if (bundle.settings.exportDefaultFormat === "text") {
+    return [
+      title,
+      "",
+      String(transcript),
+      bundle.settings.exportIncludeClaims && claims.length ? `\nClaims:\n${claims.map((claim) => `- ${claim}`).join("\n")}` : "",
+      bundle.settings.exportIncludeSources ? `\nSources: ${bundle.sources.length}` : ""
+    ].filter(Boolean).join("\n");
+  }
+
+  return [
+    `# ${title}`,
+    "",
+    String(transcript),
+    bundle.settings.exportIncludeClaims && claims.length ? `\n## Claims\n${claims.map((claim) => `- ${claim}`).join("\n")}` : "",
+    bundle.settings.exportIncludeSources ? `\n## Sources\n${bundle.sources.map((source) => `- ${source.title}${source.url ? ` (${source.url})` : ""}`).join("\n")}` : ""
+  ].filter(Boolean).join("\n");
 }
 
 function CheckUnderstandingSection({ object }: { object?: CanvasObject }) {
@@ -582,7 +626,7 @@ export function RightPanel({
   })();
 
   return (
-    <aside aria-label="Project side panel" style={{ ...panelStyle, width: `min(${panelWidth}px, 100vw)` }}>
+    <aside aria-label="Project side panel" className="right-panel" style={{ ...panelStyle, width: `min(${panelWidth}px, 100vw)` }}>
       <button
         aria-label="Resize right panel"
         disabled={!onWidthChange}
@@ -609,7 +653,7 @@ export function RightPanel({
             borderRadius: 999,
             display: "block",
             height: 44,
-              left: 3,
+            left: 3,
             position: "absolute",
             top: "50%",
             transform: "translateY(-50%)",

@@ -5,8 +5,8 @@ import { ChatBubble } from "@/components/ChatBubble";
 import { FloatingToolbar } from "@/components/FloatingToolbar";
 import { HomeHub } from "@/components/HomeHub";
 import { RightPanel } from "@/components/RightPanel";
+import { SettingsPage } from "@/components/SettingsPage";
 import { WorkspaceCanvas } from "@/components/WorkspaceCanvas";
-import { SettingsControls } from "@/components/SettingsControls";
 import { defaultProjectSettings, panelSections } from "@/lib/defaults";
 import { cleanSettings } from "@/lib/validation";
 import type { CanvasObject, Mode, PanelSection, Project, ProjectBundle, ProjectSettings } from "@/lib/types";
@@ -17,7 +17,7 @@ export default function AppPage() {
   const [selectedObjectId, setSelectedObjectId] = useState<string | null>(null);
   const [activePanel, setActivePanel] = useState<PanelSection | null>(null);
   const [panelMenuOpen, setPanelMenuOpen] = useState(false);
-  const [globalSettingsOpen, setGlobalSettingsOpen] = useState(false);
+  const [homeView, setHomeView] = useState<"home" | "settings">("home");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -102,8 +102,12 @@ export default function AppPage() {
         setGenerationError("Failed to create project. Please try again.");
         return;
       }
-      setBundle(data);
-      setSelectedObjectId(data.objects?.[0]?.id ?? null);
+      if (globalDefaults.defaultCreateAction === "open-project") {
+        setBundle(data);
+        setSelectedObjectId(data.objects?.[0]?.id ?? null);
+      } else {
+        setStatusMessage("Project created.");
+      }
       refreshProjects();
     } catch {
       setGenerationError("Failed to create project. Please try again.");
@@ -183,6 +187,7 @@ export default function AppPage() {
       return;
     }
     if (!objectId) return;
+    if (toolId === "regenerate" && bundle.settings.confirmRegenerate && !window.confirm("Regenerate this visual? The previous image will be saved only as version history metadata.")) return;
     setIsGenerating(true);
     try {
       const response = await fetch("/api/generate", {
@@ -267,6 +272,51 @@ export default function AppPage() {
     });
   }
 
+  function resetGlobalDefaults() {
+    setGlobalDefaults(defaultProjectSettings);
+    try {
+      window.localStorage.setItem("advanced-flipbook-global-defaults", JSON.stringify(defaultProjectSettings));
+      setStatusMessage("Global defaults reset.");
+    } catch (error) {
+      console.warn("Failed to reset global defaults.", error);
+      setGenerationError("Global defaults could not be reset in this browser.");
+    }
+  }
+
+  async function deleteProject(projectId: string) {
+    if (globalDefaults.confirmProjectDelete && !window.confirm("Delete this local project? This cannot be undone.")) return;
+    try {
+      const response = await fetch(`/api/projects/${projectId}?confirmProject=true`, { method: "DELETE" });
+      if (!response.ok) throw new Error("Delete failed");
+      if (bundle?.project.id === projectId) {
+        setBundle(null);
+        setSelectedObjectId(null);
+      }
+      await refreshProjects();
+      setStatusMessage("Project deleted.");
+    } catch {
+      setGenerationError("Project could not be deleted.");
+    }
+  }
+
+  async function patchProjectAction(projectId: string, type: "clear-memory" | "clear-chat") {
+    const label = type === "clear-memory" ? "project memory" : "project chat";
+    if (!window.confirm(`Clear ${label}? This cannot be undone.`)) return;
+    try {
+      const response = await fetch(`/api/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type })
+      });
+      if (!response.ok) throw new Error("Project action failed");
+      if (bundle?.project.id === projectId) await refreshBundle();
+      await refreshProjects();
+      setStatusMessage(type === "clear-memory" ? "Project memory cleared." : "Project chat cleared.");
+    } catch {
+      setGenerationError(type === "clear-memory" ? "Project memory could not be cleared." : "Project chat could not be cleared.");
+    }
+  }
+
   async function deleteObject(objectId: string) {
     if (!bundle) return;
     const needsConfirm = bundle.settings.deleteBehavior === "ask";
@@ -309,9 +359,14 @@ export default function AppPage() {
     if (!bundle) return;
     const levels = bundle.objects.filter((object) => object.type === "level");
     const others = bundle.objects.filter((object) => object.type !== "level");
+    const spacing = bundle.settings.canvasAutoOrganizeSpacing === "tight"
+      ? { levelX: 460, levelY: 320, otherX: 380, otherY: 250 }
+      : bundle.settings.canvasAutoOrganizeSpacing === "wide"
+        ? { levelX: 660, levelY: 460, otherX: 560, otherY: 340 }
+        : { levelX: 560, levelY: 390, otherX: 470, otherY: 300 };
     const nextObjects = [
-      ...levels.map((object, index) => ({ ...object, x: 260 + (index % 3) * 560, y: 140 + Math.floor(index / 3) * 390 })),
-      ...others.map((object, index) => ({ ...object, x: 300 + (index % 3) * 470, y: 520 + Math.floor(index / 3) * 300 }))
+      ...levels.map((object, index) => ({ ...object, x: 260 + (index % 3) * spacing.levelX, y: 140 + Math.floor(index / 3) * spacing.levelY })),
+      ...others.map((object, index) => ({ ...object, x: 300 + (index % 3) * spacing.otherX, y: 520 + Math.floor(index / 3) * spacing.otherY }))
     ];
     setBundle({ ...bundle, objects: nextObjects });
     try {
@@ -350,15 +405,6 @@ export default function AppPage() {
   }, [statusMessage]);
 
   useEffect(() => {
-    if (!globalSettingsOpen) return;
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "Escape") setGlobalSettingsOpen(false);
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [globalSettingsOpen]);
-
-  useEffect(() => {
     return () => {
       Object.values(frameTimers.current).forEach(clearTimeout);
       if (settingsTimer.current) clearTimeout(settingsTimer.current);
@@ -366,29 +412,33 @@ export default function AppPage() {
   }, []);
 
   if (!bundle) {
+    if (homeView === "settings") {
+      return (
+        <SettingsPage
+          settings={globalDefaults}
+          projects={projects}
+          statusMessage={statusMessage}
+          errorMessage={generationError}
+          onBack={() => setHomeView("home")}
+          onSettingsChange={updateGlobalDefaults}
+          onResetDefaults={resetGlobalDefaults}
+          onDeleteProject={deleteProject}
+          onClearProjectMemory={(projectId) => patchProjectAction(projectId, "clear-memory")}
+          onClearProjectChat={(projectId) => patchProjectAction(projectId, "clear-chat")}
+        />
+      );
+    }
     return (
       <>
-        <HomeHub projects={projects} settings={globalDefaults} isCreating={isProjectLoading} onCreateProject={createProject} onOpenProject={openProject} onOpenSettings={() => setGlobalSettingsOpen(true)} />
+        <HomeHub projects={projects} selectedMode={globalDefaults.homeDefaultMode} settings={globalDefaults} isCreating={isProjectLoading} onCreateProject={createProject} onOpenProject={openProject} onOpenSettings={() => setHomeView("settings")} />
         {statusMessage ? <div className="generation-toast success global-toast" role="status" aria-live="polite">{statusMessage}<button className="toast-dismiss" onClick={() => setStatusMessage(null)} aria-label="Dismiss">&times;</button></div> : null}
         {generationError ? <div className="generation-toast error global-toast" role="alert" aria-live="assertive">{generationError}<button className="toast-dismiss" onClick={() => setGenerationError(null)} aria-label="Dismiss">&times;</button></div> : null}
-        {globalSettingsOpen ? (
-          <div className="global-settings-modal" role="dialog" aria-modal="true" aria-label="Global settings" onClick={(e) => { if (e.target === e.currentTarget) setGlobalSettingsOpen(false); }}>
-            <div>
-              <h2>Global Settings</h2>
-              <p>These defaults apply to new local projects. Existing projects keep their own project settings.</p>
-              <div className="global-settings-content">
-                <SettingsControls settings={globalDefaults} onSettingsChange={updateGlobalDefaults} />
-              </div>
-              <button className="primary-button" onClick={() => setGlobalSettingsOpen(false)}>Done</button>
-            </div>
-          </div>
-        ) : null}
       </>
     );
   }
 
   return (
-    <main className={`workspace-shell motion-${bundle.settings.animationSpeed}`} onClick={() => setPanelMenuOpen(false)}>
+    <main className={`workspace-shell motion-${bundle.settings.animationSpeed} theme-${bundle.settings.themeTone} density-${bundle.settings.uiDensity} text-${bundle.settings.textSize} focus-${bundle.settings.focusStyle} ${bundle.settings.reducedTransparency ? "reduced-transparency" : ""}`} onClick={() => setPanelMenuOpen(false)}>
       <h1 className="sr-only">{bundle.project.name} — Advanced FlipBook workspace</h1>
       <div className="project-topbar">
         <button className="brand-button" onClick={() => setBundle(null)} aria-label="Return home">
@@ -398,11 +448,37 @@ export default function AppPage() {
           <strong>{bundle.project.name}</strong>
           <span>{bundle.objects.length} objects · local SQLite project</span>
         </div>
-        <div className="panel-trigger">
+        <div
+          className="panel-trigger"
+          onPointerDownCapture={(event) => {
+            const target = event.target as HTMLElement;
+            const sectionButton = target.closest<HTMLButtonElement>("[data-panel-section]");
+            const section = sectionButton?.dataset.panelSection as PanelSection | undefined;
+            if (!section) return;
+            event.stopPropagation();
+            setActivePanel((current) => (current === section ? null : section));
+            setPanelMenuOpen(false);
+          }}
+        >
           <button aria-label="Right panel" onClick={(e) => { e.stopPropagation(); setPanelMenuOpen((open) => !open); }}>{activePanel ?? "Panel"}</button>
           <div className={`panel-menu ${panelMenuOpen ? "open" : ""}`}>
             {panelSections.map((section) => (
-              <button key={section} onClick={() => { setActivePanel(activePanel === section ? null : section); setPanelMenuOpen(false); }}>
+              <button
+                key={section}
+                data-panel-section={section}
+                onPointerDown={(event) => {
+                  event.stopPropagation();
+                  setActivePanel((current) => (current === section ? null : section));
+                  setPanelMenuOpen(false);
+                }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  if (event.detail === 0) {
+                    setActivePanel((current) => (current === section ? null : section));
+                    setPanelMenuOpen(false);
+                  }
+                }}
+              >
                 {section}
               </button>
             ))}
@@ -424,7 +500,7 @@ export default function AppPage() {
       {!isGenerating && generationError ? <div className="generation-toast error" role="alert" aria-live="assertive">{generationError}<button className="toast-dismiss" onClick={() => setGenerationError(null)} aria-label="Dismiss">&times;</button></div> : null}
       {!isGenerating && !generationError && statusMessage ? <div className="generation-toast success" role="status" aria-live="polite">{statusMessage}<button className="toast-dismiss" onClick={() => setStatusMessage(null)} aria-label="Dismiss">&times;</button></div> : null}
 
-      <FloatingToolbar selectedObject={selectedObject} settings={bundle.settings} onTool={runTool} />
+      <FloatingToolbar selectedObject={selectedObject} orientation={bundle.settings.toolbarPosition === "left" ? "vertical" : "horizontal"} settings={bundle.settings} onTool={runTool} />
 
       <ChatBubble bundle={bundle} selectedObject={selectedObject} isSending={isChatSending} onSend={sendChat} onOpenSettings={() => setActivePanel("Chat Settings")} />
 

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { addSource, deleteObject, getProjectBundle, updateObjectFrame, updateProjectSettings } from "@/lib/db";
+import { addSource, clearProjectChat, clearProjectMemory, deleteObject, deleteProject, getProjectBundle, updateObjectFrame, updateProjectSettings } from "@/lib/db";
 import { assertLocalRequest, readJsonBody } from "@/lib/api";
 import { cleanFrame, cleanSettings, safeSourceUrl } from "@/lib/validation";
 
@@ -35,19 +35,35 @@ export async function PATCH(request: Request, context: { params: Params }) {
     return NextResponse.json(bundle);
   }
   if (body.type === "add-source") {
+    const bundle = getProjectBundle(projectId);
+    if (!bundle) return NextResponse.json({ error: "Project not found" }, { status: 404 });
     const source = body.source as { title?: string; url?: string; excerpt?: string } | undefined;
     if (!source || typeof source.title !== "string" || !source.title.trim()) {
       return NextResponse.json({ error: "Missing source title" }, { status: 400 });
     }
     const url = typeof source.url === "string" ? source.url.trim() : "";
+    if (bundle.settings.sourceUrlRequirement === "required" && !url) {
+      return NextResponse.json({ error: "Source URL is required by project settings." }, { status: 400 });
+    }
     if (url && !safeSourceUrl(url)) {
       return NextResponse.json({ error: "Source URL must start with http:// or https://." }, { status: 400 });
     }
-    const bundle = addSource(projectId, {
+    const nextBundle = addSource(projectId, {
       title: source.title.trim(),
       url,
-      excerpt: typeof source.excerpt === "string" ? source.excerpt.trim() : "Manually added source."
+      excerpt: typeof source.excerpt === "string" ? source.excerpt.trim() : "Manually added source.",
+      quality: bundle.settings.sourceDefaultQuality
     });
+    if (!nextBundle) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    return NextResponse.json(nextBundle);
+  }
+  if (body.type === "clear-memory") {
+    const bundle = clearProjectMemory(projectId);
+    if (!bundle) return NextResponse.json({ error: "Project not found" }, { status: 404 });
+    return NextResponse.json(bundle);
+  }
+  if (body.type === "clear-chat") {
+    const bundle = clearProjectChat(projectId);
     if (!bundle) return NextResponse.json({ error: "Project not found" }, { status: 404 });
     return NextResponse.json(bundle);
   }
@@ -73,7 +89,12 @@ export async function DELETE(request: Request, context: { params: Params }) {
   const { projectId } = await context.params;
   const { searchParams } = new URL(request.url);
   const objectId = searchParams.get("objectId");
-  if (!objectId) return NextResponse.json({ error: "Missing objectId" }, { status: 400 });
+  if (!objectId) {
+    if (searchParams.get("confirmProject") !== "true") {
+      return NextResponse.json({ error: "Project deletion confirmation required" }, { status: 409 });
+    }
+    return deleteProject(projectId) ? NextResponse.json({ deleted: true }) : NextResponse.json({ error: "Project not found" }, { status: 404 });
+  }
   const bundleBefore = getProjectBundle(projectId);
   if (!bundleBefore) return NextResponse.json({ error: "Project not found" }, { status: 404 });
   if (bundleBefore.settings.deleteBehavior === "ask" && searchParams.get("confirm") !== "true") {
