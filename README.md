@@ -1,4 +1,22 @@
-# Advanced FlipBook Recreation
+# Lumen Atlas - Interactive AI Flipbook Workspace
+
+> Status: prototype/beta. Lumen Atlas is a local AI visual knowledge workspace; some generation and exploration flows may still change as the product matures.
+
+Lumen Atlas lets users generate interactive flipbooks, click visual regions to explore ideas, branch into connected pages, and study topics through tools like Learn, Ask, Analyze, Compare, Timeline, Sources, and Study Guide.
+
+## Why Use Lumen Atlas?
+
+- Turns a topic into a visual, explorable knowledge workspace.
+- Supports branching pages instead of one linear chat answer.
+- Combines canvas exploration with study and analysis tools.
+- Keeps research, generated pages, and follow-up questions in one local interface.
+
+## Current Limitations
+
+- AI generation quality depends on the configured provider and prompt quality.
+- Some workflows are experimental and should be checked before serious study use.
+- This repo currently needs a clear license choice before outside reuse is encouraged.
+
 
 **A local-first AI visual knowledge workspace** where users generate interactive flipbooks, explore topics by clicking visual regions, branch into connected pages, and use tools like Learn, Ask, Analyze, Compare, Timeline, Sources, and Study Guide on an infinite canvas.
 
