@@ -16,6 +16,15 @@ Lumen Atlas lets users generate interactive flipbooks, click visual regions to e
 - AI generation quality depends on the configured provider and prompt quality.
 - Some workflows are experimental and should be checked before serious study use.
 
+## Privacy and Data Handling
+
+- Project data is stored locally with SQLite unless you add your own deployment/storage layer.
+- API keys belong in `.env.local` and should never be committed.
+- Prompts, source material, and generated content can be sent to the configured AI provider when generation or chat features are used.
+- Generated images and local artifacts may be written under project/public generated paths depending on your setup.
+- Do not use private or sensitive source material unless you understand your local storage and selected AI provider.
+- See [SECURITY.md](SECURITY.md) for vulnerability reporting and secret-handling guidance.
+
 **A local-first AI visual knowledge workspace** where users generate interactive flipbooks, explore topics by clicking visual regions, branch into connected pages, and use tools like Learn, Ask, Analyze, Compare, Timeline, Sources, and Study Guide on an infinite canvas.
 
 Built with Next.js 16, React 19, TypeScript, and SQLite — all data stays on your machine.
@@ -154,4 +163,3 @@ These visuals are generated from the actual repository structure and project wor
 ![Repository file mix](docs/assets/repo-file-mix.svg)
 
 ![Project workflow](docs/assets/workflow.svg)
-
