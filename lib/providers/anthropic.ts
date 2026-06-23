@@ -3,6 +3,8 @@ import type { ChatCompletionResult, ChatMessage, ModelDefinition, TextProvider }
 export const anthropicModels: ModelDefinition[] = [
   { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", provider: "anthropic", capabilities: ["text", "vision"], costTier: "medium" },
   { id: "claude-haiku-4-5", name: "Claude Haiku 4.5", provider: "anthropic", capabilities: ["text"], costTier: "low" },
+  { id: "claude-sonnet-4-7", name: "Claude Sonnet 4.7", provider: "anthropic", capabilities: ["text", "vision"], costTier: "medium" },
+  { id: "claude-opus-4-7", name: "Claude Opus 4.7", provider: "anthropic", capabilities: ["text", "vision"], costTier: "high" },
 ];
 
 export function createAnthropicTextProvider(apiKey: string): TextProvider {

@@ -6,6 +6,9 @@ import type { ChatCompletionResult, ChatMessage, ImageGenerationResult, ImagePro
 export const openaiModels: ModelDefinition[] = [
   { id: "gpt-4o-mini", name: "GPT-4o Mini", provider: "openai", capabilities: ["text"], costTier: "low" },
   { id: "gpt-4o", name: "GPT-4o", provider: "openai", capabilities: ["text", "vision"], costTier: "medium" },
+  { id: "gpt-5.5-mini", name: "GPT-5.5 Mini", provider: "openai", capabilities: ["text", "vision"], costTier: "low" },
+  { id: "gpt-5.5", name: "GPT-5.5", provider: "openai", capabilities: ["text", "vision"], costTier: "medium" },
+  { id: "gpt-5.5-pro", name: "GPT-5.5 Pro", provider: "openai", capabilities: ["text", "vision"], costTier: "high" },
   { id: "dall-e-3", name: "DALL-E 3", provider: "openai", capabilities: ["image"], costTier: "medium" },
 ];
 

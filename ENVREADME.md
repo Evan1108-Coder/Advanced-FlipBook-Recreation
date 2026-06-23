@@ -39,7 +39,7 @@ The app auto-detects available models from which API keys are set.
 |---|---|
 | **Required** | No |
 | **Default** | _(empty)_ |
-| **Models** | gpt-4o-mini (text, low cost), gpt-4o (text + vision), DALL-E 3 (image) |
+| **Models** | gpt-4o-mini (text, low cost), gpt-4o (text + vision), gpt-5.5-mini (text + vision, low cost), gpt-5.5 (text + vision), gpt-5.5-pro (text + vision, high), DALL-E 3 (image) |
 
 Enables OpenAI models. With this single key you get both text AND image capabilities.
 
@@ -49,7 +49,7 @@ Enables OpenAI models. With this single key you get both text AND image capabili
 |---|---|
 | **Required** | No |
 | **Default** | _(empty)_ |
-| **Models** | Claude Sonnet 4.6 (text + vision), Claude Haiku 4.5 (text, low cost) |
+| **Models** | Claude Sonnet 4.6 (text + vision), Claude Haiku 4.5 (text, low cost), Claude Sonnet 4.7 (text + vision), Claude Opus 4.7 (text + vision, high) |
 
 Enables Anthropic Claude models for text chat.
 

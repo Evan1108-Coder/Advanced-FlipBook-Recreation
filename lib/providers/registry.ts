@@ -20,6 +20,14 @@ const minimaxImageModel: ModelDefinition = {
   costTier: "low",
 };
 
+const minimaxM3Model: ModelDefinition = {
+  id: "minimax-m3",
+  name: "MiniMax M3",
+  provider: "minimax",
+  capabilities: ["text", "vision"],
+  costTier: "medium",
+};
+
 export function getAvailableModels(): AvailableModels {
   const all: ModelDefinition[] = [];
 
@@ -28,7 +36,7 @@ export function getAvailableModels(): AvailableModels {
   if (process.env.GOOGLE_API_KEY) all.push(...googleModels);
   if (process.env.GROQ_API_KEY) all.push(...groqModels);
   if (process.env.MOONSHOT_API_KEY) all.push(...moonshotModels);
-  if (process.env.MINIMAX_API_KEY) all.push(minimaxImageModel);
+  if (process.env.MINIMAX_API_KEY) all.push(minimaxImageModel, minimaxM3Model);
 
   return {
     text: all.filter((m) => m.capabilities.includes("text")),
